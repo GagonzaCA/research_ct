@@ -1,0 +1,26 @@
+# --- Core Math & Matrix Operations ---
+numpy==1.26.4
+
+# --- Image Processing & Micro-CT Loading ---
+imageio==2.34.1
+scikit-image==0.23.2
+
+# --- Visualization & Diagnostics ---
+matplotlib==3.8.4
+
+
+scipy>=1.7.0
+
+scikit-learn>=0.24.0
+
+napari>=0.4.0
+
+vedo>=2021.0.0
+
+PyVista>=0.33.0
+
+tifffile>=2021.0.0
+
+nibabel>=3.2.0
+
+jupyter>=1.0.0

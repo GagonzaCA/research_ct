@@ -1,0 +1,28 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Data & Large Files (Never commit raw CT scans to Git)
+data/raw/
+data/processed/
+*.tif
+*.tiff
+*.png
+*.npy
+
+# IDEs
+.vscode/
+.idea/
+
+# LaTeX / TeXstudio Auxiliary Files
+*.aux
+*.log
+*.toc
+*.synctex.gz
+*.blg
+*.bbl
+*.out
+*.fdb_latexmk
+*.fls
