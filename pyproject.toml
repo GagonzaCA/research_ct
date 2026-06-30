@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "book-segmentation"
+version = "0.1.0"
+description = "Unsupervised material segmentation for micro-CT of sealed historical books"
+authors = [{name = "Gabriel Augusto Gonzalez Lozano"}]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "scikit-image>=0.21.0",
+    "scikit-learn>=1.3.0",
+    "matplotlib>=3.7.0",
+    "imageio>=2.31.0",
+    "Pillow>=10.0.0",
+    "napari[all]>=0.4.18",
+    "pyvista>=0.42.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "jupyterlab>=4.0.0",
+    "ipywidgets>=8.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test_*"
+python_functions = "test_*"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true

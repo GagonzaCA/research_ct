@@ -4,6 +4,37 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+
 # Data & Large Files (Never commit raw CT scans to Git)
 data/raw/
 data/processed/
@@ -15,6 +46,13 @@ data/processed/
 # IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
 
 # LaTeX / TeXstudio Auxiliary Files
 *.aux
@@ -26,3 +64,17 @@ data/processed/
 *.out
 *.fdb_latexmk
 *.fls
+
+
+
+# Data (large files — never commit)
+data/raw/*
+data/processed/*
+data/output/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/output/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
