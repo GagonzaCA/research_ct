@@ -15,22 +15,32 @@ class Preprocessing_Config:
     Centralized configuration for the preprocessing pipeline.
     
     Attributes:
-        Radius (int): Structuring element radius for white top-hat filter.
+        -Radius (int): Structuring element radius for white top-hat filter.
             Auto-scaled to image size if None.
-        Clahe_Kernel (Tuple[int, int]): Kernel size for CLAHE.
+            
+        -Clahe_Kernel (Tuple[int, int]): Kernel size for CLAHE.
             Auto-scaled if None.
-        Clahe_Clip (float): Clip limit for CLAHE contrast enhancement.
-        Diffusion_Iterations (int): Number of Perona-Malik iterations.
-        Diffusion_Kappa (float): Conduction coefficient.
+            
+        -Clahe_Clip (float): Clip limit for CLAHE contrast enhancement.
+        
+        -Diffusion_Iterations (int): Number of Perona-Malik iterations.
+        
+        -Diffusion_Kappa (float): Conduction coefficient.
             Higher values smooth more; lower values preserve edges.
-        Diffusion_Gamma (float): Time step. Must be <= 0.25 for stability.
-        Saturation_Percentiles (Tuple[float, float]): Low and high percentiles
+            
+        -Diffusion_Gamma (float): Time step. Must be <= 0.25 for stability.
+        
+        -Saturation_Percentiles (Tuple[float, float]): Low and high percentiles
             for intensity clipping.
-        Threshold_Percentile (Optional[float]): Percentile for background
+            
+        -Threshold_Percentile (Optional[float]): Percentile for background
             suppression. None disables thresholding (recommended for GMM).
-        Edge_Smooth_Sigma (float): Gaussian sigma for edge-strength smoothing.
-        Page_Peak_Min_Distance (int): Minimum slice distance between pages.
-        Page_Peak_Min_Prominence (float): Minimum edge-strength prominence
+            
+        -Edge_Smooth_Sigma (float): Gaussian sigma for edge-strength smoothing.
+        
+        -Page_Peak_Min_Distance (int): Minimum slice distance between pages.
+        
+        -Page_Peak_Min_Prominence (float): Minimum edge-strength prominence
             for page detection.
     
     Example:
