@@ -11,4 +11,24 @@ An unsupervised hierarchical GMM-HMRF pipeline to segment arbitrary materials in
 Place raw image stacks inside `data/raw/` and execute the master wrapper:
 ```bash
 python main.py --input data/raw/reco_stack --run-preprocessing
+```
+# Book Segmentation
+
+Unsupervised material segmentation for micro-CT scans of sealed historical books.
+
+## Structure
+
+- `src/preprocessing/` — Contrast enhancement, anisotropic diffusion, diagnostics
+- `src/segmentation/` — GMM fitting, hierarchical splitting, HMRF regularization
+- `src/analysis/` — Material statistics, uncertainty quantification
+- `src/visualization/` — 3D rendering with napari
+- `notebooks/` — Interactive demos and parameter exploration
+- `tests/` — pytest suite
+
+## Installation
+
+```bash
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
 
