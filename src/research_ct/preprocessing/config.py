@@ -69,7 +69,7 @@ class Preprocessing_Config:
     Page_Peak_Min_Prominence: float = 1.5
     
     # --- Internal ---
-    _preset_name: str = field(default="Custom", repr=False)
+    _Preset_Name: str = field(default="Custom", repr=False)
     
     # Class-level presets
     _Presets: Dict[str, Dict] = field(default_factory=dict, repr=False)
@@ -133,7 +133,7 @@ class Preprocessing_Config:
             ValueError: If preset_name is not recognized.
         """
         instance = cls()
-        instance._preset_name = preset_name
+        instance._Preset_Name = preset_name
         
         if preset_name not in instance._Presets:
             available = ", ".join(instance._Presets.keys())
@@ -151,7 +151,7 @@ class Preprocessing_Config:
     def __repr__(self) -> str:
         """String representation showing preset and key parameters."""
         return (
-            f"Preprocessing_Config(preset='{self._preset_name}', "
+            f"Preprocessing_Config(preset='{self._Preset_Name}', "
             f"Radius={self.Radius}, "
             f"Diffusion_Kappa={self.Diffusion_Kappa}, "
             f"Threshold_Percentile={self.Threshold_Percentile})"
