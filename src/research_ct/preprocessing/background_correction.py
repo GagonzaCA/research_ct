@@ -7,7 +7,7 @@ contrast.
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
-
+from typing import Optional
 
 
 def Correct_Background_Global(
@@ -35,42 +35,49 @@ def Correct_Background_Global(
     """
     if Sigma <= 0:
         raise ValueError(f"Sigma must be positive, got {Sigma}")
-    
-    Slice_Float = Slice.astype(np.float64)
-    
+
+    Slice_Float = Slice.astype(np.float64, copy=False)
+
     # Estimate background with large Gaussian
     Background = gaussian_filter(Slice_Float, sigma=Sigma)
-    
+
     # Subtract and shift to positive
     Corrected = Slice_Float - Background
-    Corrected = Corrected - Corrected.min()
-    
-    return Corrected
+    return Corrected - Corrected.min()
 
 
 def Correct_Background_Volume(
     Volume: np.ndarray,
     Sigma: float = 30.0,
+    out: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Apply global background correction to entire 3D volume.
-    
+
     Processes each slice independently. The background model is
     2D per-slice; no inter-slice smoothing is applied.
-    
+
     Args:
         Volume: 3D array, shape (D, H, W).
         Sigma: Gaussian kernel sigma in voxels.
-    
+        out: Optional output array to write into (in-place when
+            out is Volume). Must have same shape as Volume.
+
     Returns:
         Corrected volume, float64.
     """
     D = Volume.shape[0]
-    Corrected = np.zeros_like(Volume, dtype=np.float64)
-    
+
+    if out is None:
+        out = np.zeros_like(Volume, dtype=np.float64)
+    elif out.shape != Volume.shape:
+        raise ValueError(
+            f"out shape {out.shape} does not match Volume shape {Volume.shape}"
+        )
+
     for Z in range(D):
-        Corrected[Z] = Correct_Background_Global(Volume[Z], Sigma)
-    
-    return Corrected
+        out[Z] = Correct_Background_Global(Volume[Z], Sigma)
+
+    return out
 
 
 def Auto_Estimate_Background_Sigma(

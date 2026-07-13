@@ -54,95 +54,95 @@ def Preprocess_For_Gmm_Revised(
         Tuple of (preprocessed_volume, diagnostics_dict).
         diagnostics_dict contains histogram stats and GMM readiness.
     """
+    # ── Input validation ──────────────────────────────────────────────
+    if Volume.ndim != 3:
+        raise ValueError(f"Expected 3D volume, got shape {Volume.shape} ({Volume.ndim}D)")
+    if Volume.size == 0:
+        raise ValueError("Volume is empty")
+    if not np.isfinite(Volume).all():
+        raise ValueError("Volume contains NaN or Inf values")
+
     D, H, W = Volume.shape
 
-    if Verbose:
-        print(
-            f"[Preprocess_GMM] Input: {Volume.shape}, "
-            f"dtype={Volume.dtype}, range [{Volume.min():.1f}, {Volume.max():.1f}]"
-        )
+    def _vprint(*args, **kwargs):
+        """Conditional verbose print — single guard for all logging."""
+        if Verbose:
+            print(*args, **kwargs)
 
-    # Step 0: Convert to float64
-    Volume_Float = Volume.astype(np.float64)
+    _vprint(
+        f"[Preprocess_GMM] Input: {Volume.shape}, "
+        f"dtype={Volume.dtype}, range [{Volume.min():.1f}, {Volume.max():.1f}]"
+    )
 
-    # Step 1: Global background correction
+    # ── Step 0: Convert to float64 once — this is the ONLY allocation ──
+    Working = Volume.astype(np.float64, copy=True)
+
     if Background_Sigma is None:
-        Background_Sigma = Auto_Estimate_Background_Sigma(Volume_Float)
+        Background_Sigma = Auto_Estimate_Background_Sigma(Working)
 
-    if Verbose:
-        print(f"\n[Step 1/4] Background correction (sigma={Background_Sigma:.1f})...")
-    T0 = time.time()
+    # ── Step 1: Global background correction (in-place via out=) ───────
+    _vprint(f"\n[Step 1/4] Background correction (sigma={Background_Sigma:.1f})...")
+    t0 = time.time()
 
-    Corrected = Correct_Background_Volume(Volume_Float, Background_Sigma)
+    Working = Correct_Background_Volume(Working, Background_Sigma, out=Working)
 
-    if Verbose:
-        print(
-            f"[Step 1/4] Done in {time.time()-T0:.1f}s. "
-            f"Range: [{Corrected.min():.1f}, {Corrected.max():.1f}]"
-        )
+    _vprint(
+        f"[Step 1/4] Done in {time.time() - t0:.1f}s. "
+        f"Range: [{Working.min():.1f}, {Working.max():.1f}]"
+    )
 
-    # Step 2: Noise reduction
-    if Verbose:
-        print(f"\n[Step 2/4] Noise reduction (sigma={Noise_Sigma})...")
-    T0 = time.time()
+    # ── Step 2: Noise reduction (in-place via scipy output=) ───────────
+    _vprint(f"\n[Step 2/4] Noise reduction (sigma={Noise_Sigma})...")
+    t0 = time.time()
 
-    Smoothed = Reduce_Noise_Volume(Corrected, Noise_Sigma)
+    Working = Reduce_Noise_Volume(Working, Noise_Sigma, out=Working)
 
-    if Verbose:
-        print(
-            f"[Step 2/4] Done in {time.time()-T0:.1f}s. "
-            f"Range: [{Smoothed.min():.1f}, {Smoothed.max():.1f}]"
-        )
+    _vprint(
+        f"[Step 2/4] Done in {time.time() - t0:.1f}s. "
+        f"Range: [{Working.min():.1f}, {Working.max():.1f}]"
+    )
 
-    # Step 3: Stationarity check and optional standardization
+    # ── Step 3: Stationarity check and optional standardization ────────
     Need_Standardization = Apply_Slice_Standardization
 
     if Check_Stationarity and not Apply_Slice_Standardization:
-        if Verbose:
-            print("\n[Step 3/4] Checking slice stationarity...")
-
-        Is_Stationary, Similarity = Check_Slice_Stationarity(Smoothed)
-
-        if Verbose:
-            print(f"[Step 3/4] Stationarity: {Is_Stationary} " f"(similarity={Similarity:.3f})")
-
+        _vprint("\n[Step 3/4] Checking slice stationarity...")
+        Is_Stationary, Similarity = Check_Slice_Stationarity(Working)
+        _vprint(
+            f"[Step 3/4] Stationarity: {Is_Stationary} "
+            f"(similarity={Similarity:.3f})"
+        )
         Need_Standardization = not Is_Stationary
 
     if Need_Standardization:
-        if Verbose:
-            print("[Step 3/4] Applying per-slice standardization...")
+        _vprint("[Step 3/4] Applying per-slice standardization...")
+        Working = Z_Score_Per_Slice(Working, out=Working)
 
-        Standardized = Z_Score_Per_Slice(Smoothed)
-    else:
-        Standardized = Smoothed
+    # ── Step 4: Global normalization (in-place via out=) ───────────────
+    _vprint(
+        f"\n[Step 4/4] Global normalization "
+        f"({Clip_Low_Percentile}-{Clip_High_Percentile} percentiles)..."
+    )
+    t0 = time.time()
 
-    # Step 4: Global normalization
-    if Verbose:
-        print(
-            f"\n[Step 4/4] Global normalization "
-            f"({Clip_Low_Percentile}-{Clip_High_Percentile} percentiles)..."
-        )
-    T0 = time.time()
-
-    Normalized = Global_Percentile_Normalize(
-        Standardized,
+    Working = Global_Percentile_Normalize(
+        Working,
         Low_Percentile=Clip_Low_Percentile,
         High_Percentile=Clip_High_Percentile,
         Target_Min=0.0,
         Target_Max=255.0,
+        out=Working,
     )
 
-    if Verbose:
-        print(
-            f"[Step 4/4] Done in {time.time()-T0:.1f}s. "
-            f"Range: [{Normalized.min():.1f}, {Normalized.max():.1f}]"
-        )
+    _vprint(
+        f"[Step 4/4] Done in {time.time() - t0:.1f}s. "
+        f"Range: [{Working.min():.1f}, {Working.max():.1f}]"
+    )
 
-    # Diagnostics
-    if Verbose:
-        print("\n[Diagnostics] Assessing GMM readiness...")
+    # ── Diagnostics ────────────────────────────────────────────────────
+    _vprint("\n[Diagnostics] Assessing GMM readiness...")
 
-    Readiness = Assess_Gmm_Readiness(Normalized, Exclude_Zero=True)
+    Readiness = Assess_Gmm_Readiness(Working, Exclude_Zero=True)
 
     if Verbose:
         print(
@@ -161,7 +161,7 @@ def Preprocess_For_Gmm_Revised(
         "stationarity_applied": Need_Standardization,
         "clip_percentiles": (Clip_Low_Percentile, Clip_High_Percentile),
         "readiness": Readiness,
-        "output_range": (float(Normalized.min()), float(Normalized.max())),
+        "output_range": (float(Working.min()), float(Working.max())),
     }
 
-    return Normalized, Diagnostics
+    return Working, Diagnostics

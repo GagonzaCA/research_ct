@@ -7,6 +7,7 @@ shift-invariant filtering that preserves global mixture structure.
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
+from typing import Optional
 
 
 def Reduce_Noise_Gaussian(
@@ -34,16 +35,14 @@ def Reduce_Noise_Gaussian(
     if Sigma <= 0:
         raise ValueError(f"Sigma must be positive, got {Sigma}")
 
-    Image_Float = Image.astype(np.float64)
-
-    Smoothed = gaussian_filter(Image_Float, sigma=Sigma)
-
-    return Smoothed
+    Image_Float = Image.astype(np.float64, copy=False)
+    return gaussian_filter(Image_Float, sigma=Sigma)
 
 
 def Reduce_Noise_Volume(
     Volume: np.ndarray,
     Sigma: float = 0.8,
+    out: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Apply Gaussian smoothing to entire 3D volume.
 
@@ -54,10 +53,10 @@ def Reduce_Noise_Volume(
     Args:
         Volume: 3D array, shape (D, H, W).
         Sigma: Gaussian kernel sigma in voxels.
+        out: Optional output array (in-place when out is Volume).
 
     Returns:
         Smoothed volume, float64.
     """
-    Volume_Float = Volume.astype(np.float64)
-
-    return gaussian_filter(Volume_Float, sigma=Sigma)
+    Volume_Float = Volume.astype(np.float64, copy=False)
+    return gaussian_filter(Volume_Float, sigma=Sigma, output=out)

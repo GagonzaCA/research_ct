@@ -15,6 +15,7 @@ def Global_Percentile_Normalize(
     High_Percentile: float = 99.9,
     Target_Min: float = 0.0,
     Target_Max: float = 255.0,
+    out: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Linear scale entire volume using global percentiles.
 
@@ -29,6 +30,7 @@ def Global_Percentile_Normalize(
         High_Percentile: Upper clipping percentile (default 99.9).
         Target_Min: Desired output minimum.
         Target_Max: Desired output maximum.
+        out: Optional output array (in-place when out is Volume).
 
     Returns:
         Normalized volume, float64, range [Target_Min, Target_Max].
@@ -38,10 +40,11 @@ def Global_Percentile_Normalize(
     """
     if Low_Percentile >= High_Percentile:
         raise ValueError(
-            f"Low_Percentile ({Low_Percentile}) must be < " f"High_Percentile ({High_Percentile})"
+            f"Low_Percentile ({Low_Percentile}) must be < "
+            f"High_Percentile ({High_Percentile})"
         )
 
-    Volume_Float = Volume.astype(np.float64)
+    Volume_Float = Volume.astype(np.float64, copy=False)
 
     # Compute global percentiles
     Low_Val, High_Val = np.percentile(
@@ -49,20 +52,27 @@ def Global_Percentile_Normalize(
         [Low_Percentile, High_Percentile],
     )
 
+    if out is None:
+        out = np.empty_like(Volume_Float, dtype=np.float64)
+
     if High_Val <= Low_Val:
         # Constant image
-        return np.full_like(Volume_Float, Target_Min)
+        out.fill(Target_Min)
+        return out
 
-    # Clip and rescale
-    Clipped = np.clip(Volume_Float, Low_Val, High_Val)
-    Normalized = (Clipped - Low_Val) / (High_Val - Low_Val)
-    Normalized = Normalized * (Target_Max - Target_Min) + Target_Min
+    # In-place clip into output, then rescale
+    np.clip(Volume_Float, Low_Val, High_Val, out=out)
+    out -= Low_Val
+    out /= (High_Val - Low_Val)
+    out *= (Target_Max - Target_Min)
+    out += Target_Min
 
-    return Normalized
+    return out
 
 
 def Z_Score_Per_Slice(
     Volume: np.ndarray,
+    out: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Standardize each slice independently to correct inter-slice drift.
 
@@ -75,24 +85,27 @@ def Z_Score_Per_Slice(
 
     Args:
         Volume: 3D array, shape (D, H, W).
+        out: Optional output array (in-place when out is Volume).
 
     Returns:
         Standardized volume, float64, approximately N(0,1) per slice.
     """
     D = Volume.shape[0]
-    Standardized = np.zeros_like(Volume, dtype=np.float64)
+
+    if out is None:
+        out = np.empty_like(Volume, dtype=np.float64)
 
     for Z in range(D):
-        Slice = Volume[Z].astype(np.float64)
+        Slice = Volume[Z].astype(np.float64, copy=False)
         Mean = Slice.mean()
         Std = Slice.std()
 
         if Std > 0:
-            Standardized[Z] = (Slice - Mean) / Std
+            out[Z] = (Slice - Mean) / Std
         else:
-            Standardized[Z] = Slice - Mean
+            out[Z] = Slice - Mean
 
-    return Standardized
+    return out
 
 
 def Check_Slice_Stationarity(
