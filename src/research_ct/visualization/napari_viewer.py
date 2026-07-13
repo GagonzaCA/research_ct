@@ -1,7 +1,7 @@
 """Interactive 3D visualization with napari."""
 
 import numpy as np
-
+from typing import  Optional
 
 def launch_napari_viewer(
     Volume: np.ndarray,

@@ -2,7 +2,7 @@
 
 import numpy as np
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 
 
 def export_probability_video(

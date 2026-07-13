@@ -1,7 +1,7 @@
 """Hidden Markov Random Field for spatial regularization."""
 
 import numpy as np
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 
 class Hmrf_Segmenter:
