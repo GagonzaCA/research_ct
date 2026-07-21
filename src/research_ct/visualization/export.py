@@ -48,6 +48,9 @@ def export_label_colors(
         Output_Path: Output file path.
         Color_Map: Dict mapping label to (R, G, B).
     """
+    # Save as stack
+    from research_ct.io.volume_loader import Save_Volume_As_Stack
+
     if Color_Map is None:
         # Default colors
         Color_Map = {
@@ -56,16 +59,16 @@ def export_label_colors(
             2: (47, 79, 79),    # Ink
             3: (139, 69, 19),   # Cover
         }
-    
+
     D, H, W = Labels.shape
     Colored = np.zeros((D, H, W, 3), dtype=np.uint8)
-    
+
     for Label, Color in Color_Map.items():
         Mask = Labels == Label
         Colored[Mask] = Color
-    
-    # Save as stack
-    from .volume_saver import Save_Volume_As_Stack
+
     # Or use imageio for multi-page TIFF
     import imageio
     imageio.mimwrite(Output_Path, [Colored[i] for i in range(D)])
+
+    Save_Volume_As_Stack(Colored, Output_Path)

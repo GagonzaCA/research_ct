@@ -11,7 +11,7 @@ import gc
 import weakref
 import numpy as np
 from pathlib import Path
-from typing import Union, Optional, Tuple, Iterator, Generator
+from typing import Union, Optional, Tuple, Iterator, Generator, Callable 
 
 Path_Like = Union[str, Path]
 
@@ -227,3 +227,141 @@ def Load_From_Numpy_Slab(
     if dtype is not None and slab.dtype != dtype:
         slab = slab.astype(dtype, copy=False)
     return slab
+
+
+
+
+# ---------------------------------------------------------------------------
+# Streaming reduction -- apply a function slab-by-slab, never holding the
+# full array in RAM, writing the result directly to a new .npy file.
+# ---------------------------------------------------------------------------
+
+def _write_npy_header(f, shape: tuple, dtype: np.dtype) -> None:
+    """Write a standard .npy v2.0 header for streamed sequential writes."""
+    np.lib.format.write_array_header_2_0(f, {
+        "descr":         np.lib.format.dtype_to_descr(np.dtype(dtype)),
+        "fortran_order": False,
+        "shape":         shape,
+    })
+
+
+def Reduce_Streaming(
+    File_Path: Path_Like,
+    Output_Path: Path_Like,
+    Reduce_Fn: Callable[[np.ndarray], np.ndarray],
+    *,
+    chunk_size: int = 10,
+    key: str = "volume",
+    dtype: Optional[np.dtype] = None,
+    gc_every: int = 10,
+) -> Path:
+    """Apply a per-slab reduction/transform to a large on-disk array and
+    stream the result directly to a new .npy file -- the full source
+    array and full result never coexist in RAM.
+
+    Typical use: deriving labels (argmax) or confidence (max) from a
+    (D, H, W, K) probability volume too large to materialize.
+
+    Args:
+        File_Path: Source .npz or .npy array.
+        Output_Path: Destination .npy path for the streamed result.
+        Reduce_Fn: Function applied to each concrete slab of shape
+            (chunk_size, ...); must preserve axis 0 (the chunk/Z axis),
+            e.g. ``lambda Slab: Slab.argmax(axis=-1)``.
+        chunk_size: Number of slices along axis 0 per slab.
+        key: Array key inside .npz (ignored for .npy).
+        dtype: Output dtype. If None, inferred from Reduce_Fn's first
+            output.
+        gc_every: Print progress / collect garbage every N slabs.
+
+    Returns:
+        Output_Path, now containing a valid streamed .npy file.
+    """
+    Output_Path = Path(Output_Path)
+    Output_Path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Peek shape only -- header read, no pixel data touched.
+    Source = Load_From_Numpy(File_Path, lazy=True, key=key)
+    Total = Source.shape[0]
+    _close_npz(Source)
+    del Source
+
+    Header_Written = False
+    Out_Dtype: Optional[np.dtype] = dtype
+    Written = 0
+
+    with open(Output_Path, "wb") as f:
+        for Chunk_Index, Slab in enumerate(
+            Load_From_Numpy_Chunked(
+                File_Path, chunk_size, axis=0, key=key, gc_every=gc_every
+            )
+        ):
+            Result_Slab = Reduce_Fn(Slab)
+            del Slab
+
+            if not Header_Written:
+                Out_Dtype = Out_Dtype or Result_Slab.dtype
+                Out_Shape = (Total,) + Result_Slab.shape[1:]
+                _write_npy_header(f, shape=Out_Shape, dtype=Out_Dtype)
+                Header_Written = True
+
+            f.write(np.ascontiguousarray(Result_Slab, dtype=Out_Dtype).tobytes())
+            f.flush()
+            Written += Result_Slab.shape[0]
+            del Result_Slab
+
+            if (Chunk_Index + 1) % gc_every == 0:
+                print(f"[Reduce_Streaming] {Written}/{Total}")
+
+    gc.collect()
+    print(f"[Reduce_Streaming] Saved -> {Output_Path}")
+    return Output_Path
+
+
+# ---------------------------------------------------------------------------
+# Convenience wrappers for the two recurring GMM/HMRF use cases
+# ---------------------------------------------------------------------------
+
+def Compute_Labels_From_Probabilities(
+    Probabilities_Path: Path_Like,
+    Output_Path: Path_Like,
+    *,
+    chunk_size: int = 10,
+    key: str = "volume",
+) -> Path:
+    """Derive integer labels (argmax over last axis) from a large
+    (D, H, W, K) probability volume, streamed slab-by-slab.
+
+    Equivalent to ``Probabilities.argmax(axis=-1)`` but memory-bounded --
+    avoids materializing the full probability array to compute it.
+    """
+    return Reduce_Streaming(
+        Probabilities_Path,
+        Output_Path,
+        Reduce_Fn=lambda Slab: Slab.argmax(axis=-1).astype(np.int32),
+        chunk_size=chunk_size,
+        key=key,
+        dtype=np.int32,
+    )
+
+
+def Compute_Confidence_From_Probabilities(
+    Probabilities_Path: Path_Like,
+    Output_Path: Path_Like,
+    *,
+    chunk_size: int = 10,
+    key: str = "volume",
+) -> Path:
+    """Derive per-voxel confidence (max prob over last axis) from a large
+    (D, H, W, K) probability volume, streamed slab-by-slab.
+
+    Equivalent to ``Probabilities.max(axis=-1)`` but memory-bounded.
+    """
+    return Reduce_Streaming(
+        Probabilities_Path,
+        Output_Path,
+        Reduce_Fn=lambda Slab: Slab.max(axis=-1).astype(np.float32),
+        chunk_size=chunk_size,
+        key=key,
+        dtype=np.float32,
+    )
