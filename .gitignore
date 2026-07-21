@@ -78,3 +78,7 @@ data/output/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Numpy files
+*.npy
+*.npz
