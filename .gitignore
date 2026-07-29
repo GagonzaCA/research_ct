@@ -82,3 +82,6 @@ Thumbs.db
 # Numpy files
 *.npy
 *.npz
+
+# Ignore VScode Kilo
+/kilo/
