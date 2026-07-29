@@ -84,4 +84,4 @@ Thumbs.db
 *.npz
 
 # Ignore VScode Kilo
-/kilo/
+.kilo/
