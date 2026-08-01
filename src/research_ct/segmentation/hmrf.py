@@ -1,13 +1,14 @@
-"""Hidden Markov Random Field for spatial regularization."""
+"""Hidden Markov Random Field (HMRF) with Potts prior for 3D spatial regularization."""
 
 import numpy as np
 from typing import Optional, Tuple, List
 
 
 class Hmrf_Segmenter:
-    """HMRF with Potts prior for 3D spatial regularization.
+    """HMRF spatial regularization using Iterated Conditional Modes (ICM).
 
-    Energy: E(L) = sum -log p(x_i | L_i) + beta * sum delta(L_i != L_j)
+    Energy Formulation:
+        E(z) = sum_i -log P(x_i | z_i) + Beta * sum_{(i,j) in E} delta(z_i != z_j)
     """
 
     def __init__(
@@ -26,41 +27,39 @@ class Hmrf_Segmenter:
         self,
         Log_Probabilities: np.ndarray,
     ) -> np.ndarray:
-        """Run ICM optimization for HMRF.
+        """Run ICM optimization for spatial label field regularization.
 
         Args:
-            Log_Probabilities: Log p(x_i | k) for each class k.
-                Shape: (D, H, W, K). Must be a writable in-memory array
-                for the slice being processed — not a raw memmap.
+            Log_Probabilities: Pre-computed log unary scores, shape (D, H, W, K).
 
         Returns:
-            Integer labels, shape (D, H, W).
+            Regularized integer labels, shape (D, H, W).
         """
         D, H, W, K = Log_Probabilities.shape
         Neighbors = self._Get_Neighbors()
 
-        # Initialize from MAP — no extra allocation, argmax is O(D*H*W*K)
+        # Initialize labels using Maximum A Posteriori (MAP)
         self.Labels = np.argmax(Log_Probabilities, axis=3).astype(np.int32)
 
-        for Iteration in range(self.Max_Iterations):
+        # Allocate memory buffers once to avoid memory churn across iterations
+        Energy = np.empty((D, H, W), dtype=np.float64)
+        Best_Energy = np.empty((D, H, W), dtype=np.float64)
+        Best_Label = np.empty((D, H, W), dtype=np.int32)
 
-            # Energy array reused across K_Class iterations — allocated once
-            Energy = np.empty((D, H, W), dtype=np.float32)
-            Best_Energy = np.full((D, H, W), np.inf, dtype=np.float32)
-            Best_Label = self.Labels.copy()
+        for Iteration in range(self.Max_Iterations):
+            Best_Energy.fill(np.inf)
+            np.copyto(Best_Label, self.Labels)
 
             for K_Class in range(K):
-                # Likelihood term — view, no copy
+                # Unary potential: -log P(x_i | K_Class) calculated in-place
                 np.negative(Log_Probabilities[..., K_Class], out=Energy)
 
-                # Spatial prior — accumulate neighbor disagreements in-place
+                # Pairwise Potts spatial prior: accumulate neighbor mismatches in-place
                 for Dz, Dy, Dx in Neighbors:
-                    # Compute shifted label view with padding
                     Neighbor_Labels = self._Shifted_View(self.Labels, Dz, Dy, Dx)
-                    # Add Beta wherever neighbor disagrees with candidate K_Class
                     Energy += np.where(Neighbor_Labels != K_Class, self.Beta, 0.0)
 
-                # Update best label wherever this class has lower energy
+                # Update best label wherever candidate class achieves strictly lower energy
                 Improved = Energy < Best_Energy
                 Best_Energy[Improved] = Energy[Improved]
                 Best_Label[Improved] = K_Class
@@ -68,12 +67,12 @@ class Hmrf_Segmenter:
             Changes = int(np.sum(Best_Label != self.Labels))
             np.copyto(self.Labels, Best_Label)
 
-            del Best_Energy, Best_Label, Energy
-
-            print(f"[HMRF] Iteration {Iteration + 1}: {Changes} changes")
+            print(
+                f"[HMRF] Iteration {Iteration + 1}/{self.Max_Iterations}: {Changes} label updates"
+            )
 
             if Changes == 0:
-                print("[HMRF] Converged")
+                print("[HMRF] Spatial optimization converged.")
                 break
 
         return self.Labels
@@ -85,12 +84,10 @@ class Hmrf_Segmenter:
         Dy: int,
         Dx: int,
     ) -> np.ndarray:
-        """Return neighbor values as a (D,H,W) array, boundary-padded with -1
-        so boundary voxels never falsely match any valid label."""
+        """Construct boundary-padded neighbor view without full volume duplication."""
         D, H, W = Array.shape
         Result = np.full((D, H, W), -1, dtype=Array.dtype)
 
-        # Source and destination slices for each axis
         Sz = slice(max(-Dz, 0), D - max(Dz, 0) or None)
         Dz_Slice = slice(max(Dz, 0), D - max(-Dz, 0) or None)
         Sy = slice(max(-Dy, 0), H - max(Dy, 0) or None)
@@ -102,7 +99,7 @@ class Hmrf_Segmenter:
         return Result
 
     def _Get_Neighbors(self) -> List[Tuple[int, int, int]]:
-        """Get neighbor offsets for chosen connectivity."""
+        """Get relative offset directions for chosen spatial connectivity."""
         if self.Connectivity == 6:
             return [
                 (-1, 0, 0),
@@ -122,4 +119,4 @@ class Hmrf_Segmenter:
                         Neighbors.append((Dz, Dy, Dx))
             return Neighbors
 
-        raise ValueError(f"Connectivity {self.Connectivity} not supported")
+        raise ValueError(f"Connectivity {self.Connectivity} not supported. Choose 6 or 26.")
