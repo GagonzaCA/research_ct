@@ -3,6 +3,7 @@ Módulo para la carga de datos multiespectrales de Fluorescencia de Rayos X (XRF
 Gestiona la lectura de archivos TIFF y el cálculo de la máscara de intensidad total T(p).
 """
 
+import json
 import numpy as np
 import imageio.v3 as iio
 from typing import Union, List, Tuple
@@ -70,3 +71,34 @@ class Xrf_Loader:
         Valid_Pixels = Stack[Mask]
 
         return Mask, Valid_Pixels
+
+
+def Update_Page_Metadata(Meta_Path: Path_Like, **Fields) -> None:
+    """Merge new fields into an existing page_NNN_meta.json file.
+
+    Args:
+        Meta_Path: Path to the page's meta.json file.
+        **Fields: Key/value pairs to merge into the existing JSON object.
+            Existing keys are overwritten; all other keys are preserved.
+
+    Raises:
+        FileNotFoundError: If Meta_Path does not exist — this function
+            updates existing metadata, it does not create a page record
+            from scratch.
+    """
+    Meta_Path = Path(Meta_Path)
+    if not Meta_Path.exists():
+        raise FileNotFoundError(
+            f"Meta_Path {Meta_Path} does not exist. Update_Page_Metadata only "
+            "updates existing page metadata records."
+        )
+
+    with open(Meta_Path, "r", encoding="utf-8") as Meta_File:
+        Metadata = json.load(Meta_File)
+
+    Metadata.update(Fields)
+
+    with open(Meta_Path, "w", encoding="utf-8") as Meta_File:
+        json.dump(Metadata, Meta_File, indent=2)
+
+    print(f"[Xrf_Loader] updated metadata fields {list(Fields.keys())} in {Meta_Path}")

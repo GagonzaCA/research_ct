@@ -3,7 +3,8 @@ Módulo de configuración para el pipeline de Fluorescencia de Rayos X (XRF).
 Define los hiperparámetros para preprocesamiento, segmentación y análisis espacial.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
 
 @dataclass
@@ -60,4 +61,30 @@ class Leaf_Signature_Config:
     """
 
     Connectivity: int = 8
+    Min_Region_Size: int = 10
+
+
+@dataclass
+class Xrf_Comparison_Config:
+    """Configuration for category-level XRF page comparison.
+
+    Attributes:
+        Allowed_Categories: Fixed vocabulary of structural page-category
+            labels. Kept as an explicit, editable list rather than an enum
+            so new categories can be added without a code change.
+        Min_Pages_Per_Category: Categories with fewer tagged pages than this
+            still get computed, but are flagged low-confidence everywhere
+            they're reported (plots, summary json).
+        Rarity_Mad_Threshold: Robust z-score magnitude above which a page is
+            flagged as "rare" relative to its category. This is a triage
+            threshold for human review, not a significance level.
+        Min_Region_Size: Passed through to spatial comparison; mirrors
+            Leaf_Signature_Config.Min_Region_Size for consistency.
+    """
+
+    Allowed_Categories: List[str] = field(default_factory=lambda: [
+        "text_only", "chapter_start", "illustration", "mixed", "unknown"
+    ])
+    Min_Pages_Per_Category: int = 5
+    Rarity_Mad_Threshold: float = 3.5
     Min_Region_Size: int = 10
