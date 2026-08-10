@@ -1,24 +1,25 @@
 """
-Módulo de configuración para el pipeline de Fluorescencia de Rayos X (XRF).
-Define los hiperparámetros para preprocesamiento, segmentación y análisis espacial.
+Configuration module for the X-Ray Fluorescence (XRF) pipeline.
+Defines hyperparameters for preprocessing, segmentation, and spatial analysis.
 """
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List
 
 
 @dataclass
 class Xrf_Preprocessing_Config:
     """
-    Configuración para la lectura y preprocesamiento de los datos XRF.
+    Configuration for XRF data reading and preprocessing.
 
     Args:
-        Noise_Threshold (float): Umbral de intensidad mínima acumulada tau_ruido
-            para considerar un píxel como válido. Por defecto es 5.0.
-        Zero_Replacement_Delta (float): Constante delta minúscula para reemplazar
-            ceros antes de la transformación CLR. Por defecto es 1e-4.
-        Compute_Dtype (str): Precisión numérica para los cálculos.
-            Por defecto es 'float64' para evitar inestabilidad en logaritmos.
+        Noise_Threshold (float): Minimum accumulated intensity threshold tau_noise
+            to consider a pixel valid. Defaults to 5.0.
+        Zero_Replacement_Delta (float): Tiny delta constant to replace zeros before
+            the CLR transformation. Defaults to 1e-4.
+        Compute_Dtype (str): Numeric precision for computations.
+            Defaults to 'float64' to avoid instability in logarithms.
     """
 
     Noise_Threshold: float = 5.0
@@ -29,17 +30,17 @@ class Xrf_Preprocessing_Config:
 @dataclass
 class Xrf_Segmentation_Config:
     """
-    Configuración para la reducción de dimensiones y clustering GMM.
+    Configuration for dimensionality reduction and GMM clustering.
 
     Args:
-        Pca_Variance_Ratio (float): Fracción de varianza explicada acumulada a
-            retener en la reducción PCA. Rango (0, 1]. Por defecto es 0.95.
-        Gmm_Min_K (int): Número mínimo de clases composicionales K a evaluar.
-            Por defecto es 2.
-        Gmm_Max_K (int): Número máximo de clases composicionales K a evaluar.
-            Por defecto es 8.
-        Covariance_Type (str): Tipo de matriz de covarianza para el GMM
-            (full, tied, diag, spherical). Por defecto es 'full'.
+        Pca_Variance_Ratio (float): Fraction of cumulative explained variance to
+            retain in PCA reduction. Range (0, 1]. Defaults to 0.95.
+        Gmm_Min_K (int): Minimum number of compositional classes K to evaluate.
+            Defaults to 2.
+        Gmm_Max_K (int): Maximum number of compositional classes K to evaluate.
+            Defaults to 8.
+        Covariance_Type (str): Covariance matrix type for the GMM
+            (full, tied, diag, spherical). Defaults to 'full'.
     """
 
     Pca_Variance_Ratio: float = 0.95
@@ -51,13 +52,13 @@ class Xrf_Segmentation_Config:
 @dataclass
 class Leaf_Signature_Config:
     """
-    Configuración para la extracción de firmas de hoja (F_h) y descriptores espaciales.
+    Configuration for leaf signature (F_h) extraction and spatial descriptors.
 
     Args:
-        Connectivity (int): Número de vecinos para el algoritmo de componentes
-            conectadas (4 u 8 para 2D). Por defecto es 8.
-        Min_Region_Size (int): Número mínimo de píxeles para considerar una
-            región válida en el análisis morfológico. Por defecto es 10.
+        Connectivity (int): Number of neighbors for the connected-components
+            algorithm (4 or 8 for 2D). Defaults to 8.
+        Min_Region_Size (int): Minimum number of pixels to consider a region
+            valid in morphological analysis. Defaults to 10.
     """
 
     Connectivity: int = 8
@@ -88,3 +89,30 @@ class Xrf_Comparison_Config:
     Min_Pages_Per_Category: int = 5
     Rarity_Mad_Threshold: float = 3.5
     Min_Region_Size: int = 10
+
+
+@dataclass
+class Bcf_Extraction_Config:
+    """Hyperparameters for BCF-to-elemental-TIFF extraction.
+
+    Controls dual-window Bremsstrahlung subtraction window geometry and
+    the detector energy cutoff. All energy values in keV.
+
+    Args:
+        Cutoff_At_Kv: Detector energy ceiling; channels above this are
+            discarded during BCF loading. Defaults to 40.0.
+        Peak_Width_Kev: Half-width of the integration window centered
+            on the emission line. Defaults to 0.20.
+        Bg_Width_Kev: Half-width of each background-sideband window
+            used for continuum estimation. Defaults to 0.10.
+        Bg_Offset_Kev: Distance from the line center to each sideband
+            center. Defaults to 0.25.
+        Output_Dir: Directory where extracted element TIFFs are written.
+            Defaults to ``data/xrf/raw/`` relative to the project root.
+    """
+
+    Cutoff_At_Kv: float = 40.0
+    Peak_Width_Kev: float = 0.20
+    Bg_Width_Kev: float = 0.10
+    Bg_Offset_Kev: float = 0.25
+    Output_Dir: Path = field(default_factory=lambda: Path("data", "xrf", "raw"))

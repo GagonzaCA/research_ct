@@ -1,6 +1,6 @@
 """
-Módulo para la carga de datos multiespectrales de Fluorescencia de Rayos X (XRF).
-Gestiona la lectura de archivos TIFF y el cálculo de la máscara de intensidad total T(p).
+Module for loading multiespectral X-Ray Fluorescence (XRF) data.
+Manages TIFF file reading and total intensity mask T(p) computation.
 """
 
 import json
@@ -14,34 +14,34 @@ Path_Like = Union[str, Path]
 
 class Xrf_Loader:
     """
-    Clase utilitaria para cargar y preprocesar el cubo de datos elementales XRF.
+    Utility class to load and preprocess the elemental XRF data cube.
     """
 
     @staticmethod
     def Load_Element_Stack(File_Paths: List[Path_Like], Dtype: str = "float64") -> np.ndarray:
         """
-        Carga una lista de archivos TIFF correspondientes a cada canal químico y los apila.
+        Loads a list of TIFF files corresponding to each chemical channel and stacks them.
 
         Args:
-            File_Paths (List[Path_Like]): Lista de rutas a los archivos TIFF elementales.
-            Dtype (str, optional): Precisión del array resultante. Por defecto "float64".
+            File_Paths (List[Path_Like]): List of paths to elemental TIFF files.
+            Dtype (str, optional): Precision of the resulting array. Defaults to "float64".
 
         Returns:
-            np.ndarray: Cubo de datos 3D de dimensiones (M, N, n) donde n es el
-                número de elementos químicos.
+            np.ndarray: 3D data cube of shape (M, N, n) where n is the
+                number of chemical elements.
 
         Raises:
-            ValueError: Si la lista de rutas está vacía o las imágenes tienen distintas dimensiones.
+            ValueError: If the path list is empty or the images have different dimensions.
         """
         if not File_Paths:
-            raise ValueError("La lista de archivos File_Paths no puede estar vacía.")
+            raise ValueError("The File_Paths list cannot be empty.")
 
         Layers = []
         for Path_Str in File_Paths:
             Image = iio.imread(Path_Str)
             Layers.append(Image.astype(Dtype, copy=False))
 
-        # Apilar a lo largo del último eje (M, N, n)
+        # Stack along the last axis (M, N, n)
         Stack = np.stack(Layers, axis=-1)
         return Stack
 
@@ -50,24 +50,24 @@ class Xrf_Loader:
         Stack: np.ndarray, Tau_Noise: float
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Calcula la intensidad total acumulada T(p) y extrae los píxeles válidos.
+        Computes the accumulated total intensity T(p) and extracts valid pixels.
 
         Args:
-            Stack (np.ndarray): Cubo multicanal (M, N, n).
-            Tau_Noise (float): Umbral mínimo de intensidad tau_ruido.
+            Stack (np.ndarray): Multichannel cube (M, N, n).
+            Tau_Noise (float): Minimum intensity threshold tau_noise.
 
         Returns:
             Tuple[np.ndarray, np.ndarray]:
-                - Mask (np.ndarray): Matriz booleana 2D (M, N) con los píxeles válidos.
-                - Valid_Pixels (np.ndarray): Matriz 2D aplanada de dimensiones (N_validos, n).
+                - Mask (np.ndarray): 2D boolean array (M, N) with valid pixels.
+                - Valid_Pixels (np.ndarray): Flattened 2D array of shape (N_valid, n).
         """
-        # Intensidad total T(p) sumando todos los canales
+        # Total intensity T(p) by summing all channels
         Total_Intensity = np.sum(Stack, axis=-1)
 
-        # Máscara binaria
+        # Binary mask
         Mask = Total_Intensity >= Tau_Noise
 
-        # Indexación para extraer solo vectores válidos (aplanamiento)
+        # Index to extract only valid vectors (flattening)
         Valid_Pixels = Stack[Mask]
 
         return Mask, Valid_Pixels

@@ -1,5 +1,5 @@
 """
-Módulo para la reducción de dimensiones y clustering probabilístico de datos XRF.
+Module for dimensionality reduction and probabilistic clustering of XRF data.
 """
 
 import numpy as np
@@ -10,7 +10,7 @@ from typing import Tuple, List, Dict
 
 class Xrf_Gmm_Segmenter:
     """
-    Clase encargada de reducir dimensionalidad (PCA) y agrupar comportamientos (GMM).
+    Class responsible for reducing dimensionality (PCA) and grouping behaviors (GMM).
     """
 
     @staticmethod
@@ -21,26 +21,26 @@ class Xrf_Gmm_Segmenter:
         Covariance_Type: str = "full",
     ) -> Tuple[np.ndarray, np.ndarray, PCA, GaussianMixture]:
         """
-        Aplica PCA para retener varianza y luego ajusta un GMM.
+        Applies PCA to retain variance and then fits a GMM.
 
         Args:
-            Clr_Data (np.ndarray): Datos en espacio log-ratio (N_validos, n).
-            Num_Components (int): Número de clases K a buscar.
-            Variance_Ratio (float, optional): Varianza a retener. Por defecto 0.95.
-            Covariance_Type (str, optional): Tipo de covarianza. Por defecto "full".
+            Clr_Data (np.ndarray): Data in log-ratio space (N_valid, n).
+            Num_Components (int): Number of classes K to search for.
+            Variance_Ratio (float, optional): Variance to retain. Defaults to 0.95.
+            Covariance_Type (str, optional): Covariance type. Defaults to "full".
 
         Returns:
             Tuple:
-                - Etiquetas discretas (N_validos,)
-                - Probabilidades posteriores (N_validos, K)
-                - Objeto PCA entrenado
-                - Objeto GMM entrenado
+                - Discrete labels (N_valid,)
+                - Posterior probabilities (N_valid, K)
+                - Trained PCA object
+                - Trained GMM object
         """
-        # Reducción PCA
+        # PCA reduction
         Pca_Model = PCA(n_components=Variance_Ratio, svd_solver="full")
         Z_Data = Pca_Model.fit_transform(Clr_Data)
 
-        # Clustering GMM
+        # GMM clustering
         Gmm_Model = GaussianMixture(
             n_components=Num_Components, covariance_type=Covariance_Type, random_state=42
         )
@@ -56,15 +56,15 @@ class Xrf_Gmm_Segmenter:
         Clr_Data: np.ndarray, K_Range: List[int], Variance_Ratio: float = 0.95
     ) -> Dict[int, float]:
         """
-        Calcula el criterio de información bayesiano (BIC) para un rango de K.
+        Computes the Bayesian Information Criterion (BIC) for a range of K.
 
         Args:
-            Clr_Data (np.ndarray): Datos en espacio log-ratio.
-            K_Range (List[int]): Lista de valores K a evaluar.
-            Variance_Ratio (float): Varianza a retener en PCA previo.
+            Clr_Data (np.ndarray): Data in log-ratio space.
+            K_Range (List[int]): List of K values to evaluate.
+            Variance_Ratio (float): Variance to retain in prior PCA.
 
         Returns:
-            Dict[int, float]: Diccionario que mapea K con su puntaje BIC.
+            Dict[int, float]: Dictionary mapping K to its BIC score.
         """
         Pca_Model = PCA(n_components=Variance_Ratio, svd_solver="full")
         Z_Data = Pca_Model.fit_transform(Clr_Data)

@@ -1,6 +1,6 @@
 """
-Módulo de transformaciones para el Análisis de Datos Composicionales (CoDa).
-Implementa la transformación Centered Log-Ratio (CLR) para superar el efecto de cierre.
+Module of transformations for Compositional Data Analysis (CoDa).
+Implements the Centered Log-Ratio (CLR) transformation to overcome the closure effect.
 """
 
 import numpy as np
@@ -8,34 +8,34 @@ import numpy as np
 
 class Clr_Transformer:
     """
-    Clase para aplicar transformaciones proporcionales y CLR a datos XRF.
+    Class to apply proportional and CLR transformations to XRF data.
     """
 
     @staticmethod
     def Apply_Clr_Transform(Valid_Pixels: np.ndarray, Delta: float = 1e-4) -> np.ndarray:
         """
-        Convierte intensidades brutas en proporciones, aplica reemplazo de ceros
-        y proyecta al espacio euclidiano mediante la transformación CLR.
+        Converts raw intensities to proportions, applies zero replacement, and
+        projects to Euclidean space via the CLR transformation.
 
         Args:
-            Valid_Pixels (np.ndarray): Matriz (N_validos, n) con intensidades brutas >= 0.
-            Delta (float, optional): Constante pequeña para el reemplazo de ceros.
-                Por defecto 1e-4.
+            Valid_Pixels (np.ndarray): Array (N_valid, n) with raw intensities >= 0.
+            Delta (float, optional): Small constant for zero replacement.
+                Defaults to 1e-4.
 
         Returns:
-            np.ndarray: Matriz (N_validos, n) transformada en el espacio real (R^n).
+            np.ndarray: Array (N_valid, n) transformed to real space (R^n).
         """
-        # 1. Normalización (cierre) a proporciones (sum = 1)
+        # 1. Normalization (closure) to proportions (sum = 1)
         Row_Sums = np.sum(Valid_Pixels, axis=1, keepdims=True)
         Proportions = Valid_Pixels / Row_Sums
 
-        # 2. Reemplazo multiplicativo de ceros simple
+        # 2. Simple multiplicative zero replacement
         Proportions[Proportions == 0.0] = Delta
 
-        # Renormalización tras imputar ceros
+        # Renormalization after imputing zeros
         Proportions = Proportions / np.sum(Proportions, axis=1, keepdims=True)
 
-        # 3. Transformación Centered Log-Ratio (CLR)
+        # 3. Centered Log-Ratio (CLR) transformation
         # log( x_i / geometric_mean(x) )
         Log_Proportions = np.log(Proportions)
         Geometric_Mean = np.mean(Log_Proportions, axis=1, keepdims=True)

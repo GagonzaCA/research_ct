@@ -1,5 +1,5 @@
 """
-Módulo para la reconstrucción topológica y extracción de métricas espaciales (CCA).
+Module for topological reconstruction and extraction of spatial metrics (CCA).
 """
 
 import numpy as np
@@ -8,22 +8,22 @@ from typing import Dict, Any
 
 
 class Spatial_Analyzer:
-    """Clase para mapear etiquetas a 2D y analizar su morfología."""
+    """Class to map labels to 2D and analyze their morphology."""
 
     @staticmethod
     def Reconstruct_Class_Map(
         Labels: np.ndarray, Mask: np.ndarray, Fill_Value: int = -1
     ) -> np.ndarray:
         """
-        Asigna el vector aplanado de etiquetas de vuelta a la grilla 2D.
+        Maps the flattened label vector back to the 2D grid.
 
         Args:
-            Labels (np.ndarray): Etiquetas 1D (N_validos,).
-            Mask (np.ndarray): Máscara binaria 2D (M, N).
-            Fill_Value (int, optional): Valor para fondo (ruido). Por defecto -1.
+            Labels (np.ndarray): 1D labels (N_valid,).
+            Mask (np.ndarray): 2D binary mask (M, N).
+            Fill_Value (int, optional): Background (noise) value. Defaults to -1.
 
         Returns:
-            np.ndarray: Mapa de clases 2D de tamaño (M, N).
+            np.ndarray: 2D class map of shape (M, N).
         """
         Class_Map = np.full(Mask.shape, Fill_Value, dtype=np.int32)
         Class_Map[Mask] = Labels
@@ -34,26 +34,26 @@ class Spatial_Analyzer:
         Class_Map: np.ndarray, Target_Class: int, Min_Size: int = 10
     ) -> Dict[str, float]:
         """
-        Calcula descriptores de componentes conectadas para una clase.
+        Computes connected-component descriptors for a class.
 
         Args:
-            Class_Map (np.ndarray): Mapa de clases 2D.
-            Target_Class (int): Identificador de la clase a analizar.
-            Min_Size (int): Tamaño mínimo para considerar una región.
+            Class_Map (np.ndarray): 2D class map.
+            Target_Class (int): Identifier of the class to analyze.
+            Min_Size (int): Minimum size to consider a region.
 
         Returns:
-            Dict[str, float]: Diccionario con Num_Regiones y Tamaño_Promedio.
+            Dict[str, float]: Dictionary with Num_Regions and Average_Size.
         """
         Binary_Mask = (Class_Map == Target_Class).astype(np.uint8)
 
-        # Conectividad de 8 (matriz 3x3 de unos)
+        # 8-connectivity (3x3 matrix of ones)
         Structure = np.ones((3, 3), dtype=np.uint8)
         Labeled_Array, Num_Features = ndimage.label(Binary_Mask, structure=Structure)
 
         Valid_Regions = 0
         Total_Area = 0
 
-        # Filtrar regiones pequeñas
+        # Filter small regions
         for Region_Id in range(1, Num_Features + 1):
             Area = np.sum(Labeled_Array == Region_Id)
             if Area >= Min_Size:

@@ -75,6 +75,11 @@ data/output/*
 !data/processed/.gitkeep
 !data/output/.gitkeep
 
+# XRF BCF input (large proprietary files — never commit)
+data/xrf/bcf/*
+!data/xrf/bcf/.gitkeep
+*.bcf
+
 # OS
 .DS_Store
 Thumbs.db

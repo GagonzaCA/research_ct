@@ -1,5 +1,5 @@
 """
-Módulo para sintetizar la composición y estructura de una hoja en la firma compacta F_h.
+Module to synthesize leaf composition and structure into the compact signature F_h.
 """
 
 import numpy as np
@@ -7,19 +7,19 @@ from typing import List, Dict
 
 
 class Leaf_Signature_Extractor:
-    """Clase para compilar la firma descriptiva de una página de libro."""
+    """Class to compile the descriptive signature of a book page."""
 
     @staticmethod
     def Compute_Abundances(Labels: np.ndarray, Num_Classes: int) -> np.ndarray:
         """
-        Calcula la fracción de área A_k que ocupa cada clase.
+        Computes the area fraction A_k occupied by each class.
 
         Args:
-            Labels (np.ndarray): Vector de asignaciones 1D.
-            Num_Classes (int): Número total K de clases GMM.
+            Labels (np.ndarray): 1D assignment vector.
+            Num_Classes (int): Total number K of GMM classes.
 
         Returns:
-            np.ndarray: Vector de abundancias (K,) que suma 1.0.
+            np.ndarray: Abundance vector (K,) that sums to 1.0.
         """
         Total_Valid = len(Labels)
         if Total_Valid == 0:
@@ -34,14 +34,14 @@ class Leaf_Signature_Extractor:
     @staticmethod
     def Compute_Weighted_Book_Signature(Signatures: np.ndarray, Weights: np.ndarray) -> np.ndarray:
         """
-        Calcula el modelo promedio global del documento aplicando pesos.
+        Computes the global average model of the document by applying weights.
 
         Args:
-            Signatures (np.ndarray): Matriz de firmas (H_paginas, D_features).
-            Weights (np.ndarray): Vector de pesos w_h (H_paginas,).
+            Signatures (np.ndarray): Signature matrix (H_pages, D_features).
+            Weights (np.ndarray): Weight vector w_h (H_pages,).
 
         Returns:
-            np.ndarray: Firma global promediada F_bar (D_features,).
+            np.ndarray: Averaged global signature F_bar (D_features,).
         """
         Normalized_Weights = Weights / np.sum(Weights)
         return np.average(Signatures, axis=0, weights=Normalized_Weights)
