@@ -73,7 +73,6 @@ data/processed/*
 data/output/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
-!data/output/.gitkeep
 !data/output/figures/.gitkeep
 !data/output/processed/.gitkeep
 !data/output/diagnostics/.gitkeep
