@@ -36,8 +36,6 @@ env/
 
 
 # Data & Large Files (Never commit raw CT scans to Git)
-data/raw/
-data/processed/
 *.tif
 *.tiff
 *.png
@@ -73,6 +71,7 @@ data/processed/*
 data/output/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+!data/output/.gitkeep
 !data/output/figures/.gitkeep
 !data/output/processed/.gitkeep
 !data/output/diagnostics/.gitkeep
