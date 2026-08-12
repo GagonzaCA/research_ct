@@ -1,0 +1,20 @@
+{
+  "page_counts": {
+    "text_only": 1
+  },
+  "low_confidence_categories": [
+    "text_only"
+  ],
+  "config": {
+    "Allowed_Categories": [
+      "text_only",
+      "chapter_start",
+      "illustration",
+      "mixed",
+      "unknown"
+    ],
+    "Min_Pages_Per_Category": 5,
+    "Rarity_Mad_Threshold": 3.5,
+    "Min_Region_Size": 10
+  }
+}
