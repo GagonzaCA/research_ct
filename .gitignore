@@ -81,6 +81,27 @@ data/xrf/bcf/*
 !data/xrf/bcf/.gitkeep
 *.bcf
 
+# Micro-CT example data (large files — never commit)
+data/micro_ct/raw/*
+!data/micro_ct/raw/.gitkeep
+
+data/micro_ct/output/*
+!data/micro_ct/output/.gitkeep
+!data/micro_ct/output/processed/.gitkeep
+!data/micro_ct/output/figures/.gitkeep
+!data/micro_ct/output/diagnostics/.gitkeep
+
+# XRF page data (large files — never commit)
+data/xrf/pages/*
+!data/xrf/pages/.gitkeep
+
+# XRF output sub-directories (large files — never commit)
+data/xrf/output/diagnostics/*
+!data/xrf/output/diagnostics/.gitkeep
+
+data/xrf/output/comparison/montages/*
+!data/xrf/output/comparison/montages/.gitkeep
+
 # OS
 .DS_Store
 Thumbs.db
