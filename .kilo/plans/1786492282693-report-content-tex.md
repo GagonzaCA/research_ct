@@ -564,3 +564,819 @@ under absorption CT regardless of segmentation quality, which is the primary
 argument for the XRF branch as a complementary, non-absorption-based source of
 material evidence.
 ```
+
+---
+
+# Update: Deep-Dive Multi-File Phase (`xrf_pipeline.tex`, `microct_pipeline.tex`, `bcf_processing.tex`)
+
+## New instructions from the user (2026-08-12)
+- Split the deep technical pipeline write-up into **3 independent files**, done **sequentially, one at a time**, stopping after each for explicit "Proceed to Phase N" confirmation.
+- **Structural shift for these 3 files only:** no `\section{}` at all — use `\subsection{}`, `\subsubsection{}`, `\paragraph{}` only, since they are meant to be `\input{}`ed into a larger document (presumably under the `\section{Methodology}` / `\section{Procedure/Pipeline}` of `report_content.tex`, or the user's own template section — not specified, and not blocking since these files don't declare their own `\section`).
+- Same Figure Handling Protocol (Rules 1/2/3) and math formatting as before. Given the user's earlier confirmed decision (all figures via Rule 3 placeholders, never `\includegraphics` from `data/`), that same decision carries forward here.
+- High rigor: no skipped math steps; explicit mapping of every mathematical symbol to the actual NumPy/Python variable and data structure in the code; explicit data lifecycle (load/store/transform/save) per notebook step.
+- Phase 2 (Micro-CT) has an extra requirement: cover **every** method/algorithm/experiment present in the CT notebooks, not just the final chosen one (e.g. legacy `pipeline.py` visual-enhancement path alongside the active `pipeline_revised.py` statistics path, and both `Gmm_Fitter`/BIC and `Sparse_Bayesian_Gmm` alternatives).
+- Phase 3 (BCF) has an extra requirement: explicit library focus (HyperSpy, h5py, NumPy specifics) and how each library call is leveraged.
+- **Plan Mode constraint (unchanged):** I can only write to this plan file. I cannot create `xrf_pipeline.tex` (or the other two files) directly. The content below is the complete, ready-to-copy deliverable for Phase 1 — an implementation-capable agent must copy it verbatim into a new file. Output location is assumed to match `report_content.tex`'s sibling location, `C:\Users\gabri\Documento\Mitacs\xrf_pipeline.tex`, unless the user specifies otherwise.
+- Per the user's explicit sequencing rule, **stop after Phase 1** and wait for "Proceed to Phase 2" before drafting `microct_pipeline.tex`.
+
+## Source material read for Phase 1 (XRF notebooks 01–07, in addition to the `src/xrf/` modules already read for `report_content.tex`)
+| Notebook | File |
+|---|---|
+| 01 | `notebooks/xrf/01_xrf_loading_and_masking.ipynb` |
+| 02 | `notebooks/xrf/02_coda_transformations.ipynb` |
+| 03 | `notebooks/xrf/03_gmm_spatial_clustering.ipynb` |
+| 04 | `notebooks/xrf/04_leaf_signatures.ipynb` |
+| 05 | `notebooks/xrf/05_page_categorization.ipynb` |
+| 06 | `notebooks/xrf/06_category_signature_comparison.ipynb` |
+| 07 | `notebooks/xrf/07_rarity_review.ipynb` |
+
+Additional `src/xrf/` files read specifically to ground this deep dive precisely (beyond what `report_content.tex` already cites): `io/xrf_loader.py` (`Xrf_Loader`, `Update_Page_Metadata`), `config.py` (all 5 dataclasses), `comparison/category_registry.py` (`Category_Registry`), `comparison/spatial_comparison.py` (`Category_Spatial_Comparator`), `visualization/xrf_plots.py` (`Plot_Category_Signature_Bars`, `Plot_Category_Signature_Radar`, `Build_Category_Montage`).
+
+Note: `notebooks/xrf/xrf_bcf_extraction.ipynb` and `src/xrf/preprocessing/bcf_extractor.py` were intentionally **not** used here — they belong to Phase 3 (`bcf_processing.tex`).
+
+## Notable implementation details surfaced during this deep read (included in the content below as explicit rigor notes, not glossed over)
+- `Compute_Intensity_Mask` is called twice in notebook 01 (once immediately after loading, once again after plotting the histogram) and the mask/valid-pixel `.npy` files are saved twice identically — redundant but not incorrect.
+- `Compute_Bic_Curve` hardcodes `covariance_type` implicitly to sklearn's default (`"full"`) inside its own `GaussianMixture(n_components=K, random_state=42)` call, ignoring `seg_config.Covariance_Type` — only `Fit_Predict` actually honors the configured `Covariance_Type`.
+- The notebook 03 "optimal" $K=8$ is **hardcoded by visual choice**, not `argmin` of the BIC curve just computed — the BIC curve is diagnostic only in this run.
+- `Fit_Predict` re-fits a brand-new `PCA` instance rather than reusing the one fit inside `Compute_Bic_Curve` — harmless but duplicated computation.
+- `Cluster_Segmentation_Map.tiff` is written to the notebook's current working directory (not `PROCESSED_DATA_DIR`), unlike every other artifact in the same cell — a path inconsistency.
+- `Leaf_Signature_Extractor.Compute_Abundances` is implemented as an explicit `for K in range(Num_Classes)` loop, not a vectorized `np.bincount`, despite computing the same quantity.
+- `Compute_Weighted_Book_Signature` manually renormalizes `Weights` and then also passes them to `np.average(..., weights=...)`, which renormalizes internally again — a harmless double-normalization.
+- Notebook 04's demonstration of `Compute_Weighted_Book_Signature` is run on **synthetic mock data** (`np.random.rand(5, optimal_k)`), not real multi-page data; the real aggregation path is notebook 06's `Category_Signature_Aggregator`, which reuses the identical function with uniform weights.
+- Notebooks 06 and 07 both **recompute** `Page_Signatures`/`Page_Categories` from scratch by reloading `labels.npy` + `meta.json` rather than reusing any previously saved abundance vector — the only cross-notebook persisted signal is the `structural_category` field written into `meta.json` by notebook 05.
+- `Category_Signature_Aggregator.Aggregate_By_Category` calls `np.stack` across all pages in a category, which silently assumes every page in that category was segmented with the **same** $K$ (`optimal_k`) — since $K$ is chosen manually per page in notebook 03, this is an implicit cross-page consistency assumption, not an enforced invariant.
+- `Category_Spatial_Comparator.Aggregate_Region_Stats`'s output is displayed inline in notebook 06 but **never saved to disk** — only the categorical `config` values (not the computed stats) are captured in `category_comparison_summary.json`.
+- The `0.6745` constant in `Rarity_Scorer.Compute_Robust_Deviation` is the standard normal-consistency scale for the median absolute deviation ($\approx 1/1.4826$), making the robust deviation an approximation of a z-score under a Gaussian null.
+- Rarity ranking aggregates per-class deviations via the $L^\infty$ norm (`np.max(np.abs(...))`), i.e. a single worst-offending class flags a page — not a joint/Mahalanobis-style multivariate outlier statistic.
+
+## Phase 1 Deliverable: `xrf_pipeline.tex` (write verbatim to `Mitacs/xrf_pipeline.tex`)
+
+```latex
+% ==============================================================================
+% xrf_pipeline.tex
+% No \section{} — subsection/subsubsection/paragraph only. Intended for
+% \input{} into a larger document (e.g. under the main report's Methodology
+% or Procedure/Pipeline section).
+% ==============================================================================
+
+\subsection{XRF Elemental Pipeline: Notation and Data-Structure Mapping}
+
+Before detailing each notebook, the mathematical notation used throughout this
+pipeline is fixed against the exact NumPy data structures that carry it in
+code, since every subsequent step operates on one of these objects:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Code variable / type} \\
+\midrule
+$p = (i,j)$ & Pixel index in a page image & Implicit array index into axes 0,1 \\
+$n$ & Number of elemental channels & \texttt{stack.shape[-1]} (e.g. 6 in the loaded example) \\
+$S \in \mathbb{R}^{M\times N \times n}_{\geq 0}$ & Raw elemental data cube & \texttt{stack}, \texttt{np.ndarray} shape $(M,N,n)$, \texttt{float64} \\
+$T(p) = \sum_{k=1}^n S_{i,j,k}$ & Total accumulated intensity & \texttt{total\_intensity}, shape $(M,N)$ \\
+$\tau$ & Noise/validity threshold & \texttt{config.Noise\_Threshold} (\texttt{Xrf\_Preprocessing\_Config}) \\
+$B \in \{0,1\}^{M\times N}$ & Validity mask & \texttt{mask}, boolean \texttt{np.ndarray} $(M,N)$ \\
+$x \in \mathbb{R}^{N_{\text{valid}}\times n}_{\geq 0}$ & Flattened valid raw pixel vectors & \texttt{valid\_pixels} $= $\texttt{stack[mask]} \\
+$y \in \Delta^{n-1}$ (simplex) & Closed compositional proportions & \texttt{Proportions}, shape $(N_{\text{valid}}, n)$ \\
+$\delta$ & Zero-replacement constant & \texttt{config.Zero\_Replacement\_Delta} $= 10^{-4}$ \\
+$z \in \mathbb{R}^n$, $\sum_i z_i = 0$ & CLR-transformed coordinates & \texttt{clr\_data}, shape $(N_{\text{valid}}, n)$ \\
+$m$ & Retained PCA dimensionality & inferred at runtime from \texttt{Pca\_Variance\_Ratio} \\
+$Z \in \mathbb{R}^{N_{\text{valid}}\times m}$ & PCA-projected coordinates & \texttt{Z\_Data} inside \texttt{Xrf\_Gmm\_Segmenter} \\
+$K$ & Number of compositional classes & \texttt{Num\_Components} / \texttt{optimal\_k} \\
+$\gamma \in [0,1]^{N_{\text{valid}}\times K}$ & GMM posterior responsibilities & \texttt{probabilities} \\
+$\ell \in \{0,\dots,K-1\}^{N_{\text{valid}}}$ & Hard class labels & \texttt{labels} \\
+$C \in \{-1,0,\dots,K-1\}^{M\times N}$ & Reconstructed 2D class map & \texttt{class\_map} \\
+$A \in \Delta^{K-1}$ & Per-page abundance signature $F_h$ & \texttt{abundances} \\
+$w_h$ & Per-page reliability weight & \texttt{mock\_weights} / \texttt{Uniform\_Weights} \\
+$\bar F$ & Weighted signature (book- or category-level) & \texttt{global\_signature} / \texttt{Category\_Means[...]} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Every quantity above is carried on disk between notebooks as a \texttt{.npy}
+(NumPy binary array) or \texttt{.json} (Python dict) artifact under
+\texttt{data/xrf/output/processed/}, keyed by a page identifier such as
+\texttt{page\_001}; the full lifecycle of each artifact is detailed per
+notebook below.
+
+\subsection{Notebook 01 --- Loading and Intensity Masking}
+
+\subsubsection{Purpose and data lifecycle}
+
+\paragraph{Load.} A fixed, manually enumerated list of TIFF file paths (one
+per elemental channel, e.g.\ \texttt{Letter\_1\_Au\_La.tiff},
+\texttt{Letter\_1\_Fe\_Ka.tiff}, \texttt{Letter\_1\_Cu\_Ka.tiff},
+\texttt{Letter\_1\_Hg\_La.tiff}, \texttt{Letter\_1\_Pb\_La.tiff},
+\texttt{Letter\_1\_As\_Ka.tiff}) is passed to
+\texttt{Xrf\_Loader.Load\_Element\_Stack(File\_Paths, Dtype=config.Compute\_Dtype)}.
+Internally, each file is read with \texttt{imageio.v3.imread}, cast to
+\texttt{Dtype} (\texttt{float64} by default, per \texttt{Xrf\_Preprocessing\_Config}),
+appended to a Python list \texttt{Layers}, and the list is stacked with
+\texttt{np.stack(Layers, axis=-1)}, producing the data cube $S$ with shape
+$(M,N,n)$ — the new axis is placed \emph{last}, so channel $k$ of pixel
+$(i,j)$ is $S_{i,j,k}$, matching the notation table above.
+
+\paragraph{Transform (intensity aggregation and thresholding).} The total
+accumulated intensity per pixel is
+
+$$
+T(i,j) = \sum_{k=1}^{n} S_{i,j,k}
+$$
+
+computed in one call as \texttt{total\_intensity = np.sum(stack, axis=-1)},
+reducing the last (channel) axis and leaving a 2D array of shape $(M,N)$. The
+validity mask is a pointwise threshold test,
+
+$$
+B_{i,j} = \mathbb{1}\!\left[T(i,j) \geq \tau\right], \qquad \tau = \texttt{config.Noise\_Threshold} = 5.0,
+$$
+
+realized as the vectorized boolean comparison \texttt{mask = total\_intensity >= Tau\_Noise}
+inside \texttt{Xrf\_Loader.Compute\_Intensity\_Mask}. The valid-pixel matrix is
+then extracted by \emph{boolean fancy indexing on the leading two axes only}:
+
+$$
+x = S[B] \in \mathbb{R}^{N_{\text{valid}} \times n}, \qquad N_{\text{valid}} = \sum_{i,j} B_{i,j}.
+$$
+
+In code this is \texttt{Valid\_Pixels = Stack[Mask]}: because \texttt{Mask} has
+shape $(M,N)$ matching the first two axes of \texttt{Stack}, NumPy collapses
+those two axes into a single axis ordered by row-major (C-order) traversal of
+the \texttt{True} entries of \texttt{Mask}, and keeps the trailing channel axis
+intact — the result is a strictly 2D array of shape $(N_{\text{valid}}, n)$.
+This exact row-major ordering is what later allows
+\texttt{Spatial\_Analyzer.Reconstruct\_Class\_Map} (notebook 03) to invert the
+operation and scatter a $(N_{\text{valid}},)$ label vector back into the
+original $(M,N)$ pixel grid via \texttt{Class\_Map[Mask] = Labels}.
+
+\paragraph{Rigor note: redundant computation.} The notebook calls
+\texttt{Xrf\_Loader.Compute\_Intensity\_Mask} \emph{twice} — once immediately
+after loading (to report shapes and save artifacts), and a second time after
+plotting the total-intensity histogram (purely to reprint the retained-pixel
+fraction). Both calls are mathematically identical and produce bit-identical
+\texttt{mask}/\texttt{valid\_pixels} arrays; the corresponding
+\texttt{np.save} calls are likewise executed twice with identical content.
+
+\paragraph{Save.} \texttt{mask} (boolean, shape $(M,N)$) and
+\texttt{valid\_pixels} (\texttt{float64}, shape $(N_{\text{valid}}, n)$) are
+persisted with \texttt{np.save} to
+\texttt{data/xrf/output/processed/page\_001\_mask.npy} and
+\texttt{page\_001\_valid\_pixels.npy} respectively. No image compression or
+metadata is attached; these are raw NumPy binary dumps, reloaded verbatim by
+notebook 02 and by every later notebook that needs \texttt{mask} to
+reconstruct a 2D map from a 1D label vector.
+
+% ==============================================================================
+% [NEW PLOT NEEDED: Total Intensity Histogram with Validity Threshold]
+% Suggested Source: Inline matplotlib cell in `01_xrf_loading_and_masking.ipynb`
+%   (plt.hist(total_intensity.ravel(), ...)); this plot is only ever shown via
+%   plt.show(), never persisted to disk in the notebook as written.
+% Plot Type: Histogram with a vertical threshold marker
+% X-Axis: Label = "Accumulated Intensity T(p)", Range/Scale = [0, max(total_intensity)]
+% Y-Axis: Label = "Frequency (Pixels)", Range/Scale = [0, auto]
+% Data Series / Curves:
+%   1. Histogram of total_intensity.ravel() over 50 bins (Color: Gray, filled bars, alpha=0.7)
+%   2. Vertical dashed line at x = tau (Config.Noise_Threshold = 5.0) (Color: Red, dashed)
+% Key Trend to Highlight: The fraction of pixels (reported in the console as
+%   "Valid pixels retained: N_valid (percentage%)") that fall to the right of
+%   the threshold line and are therefore retained as x for the CLR pipeline.
+% ==============================================================================
+
+\subsection{Notebook 02 --- Compositional Data Analysis: The Centered Log-Ratio Transform}
+
+\subsubsection{Why a direct transform is invalid}
+
+Each valid pixel's raw channel vector $x = (x_1,\dots,x_n)$, $x_i \geq 0$, is a
+vector of counts, not an unconstrained Euclidean observation: only the
+\emph{relative} proportions between channels carry compositional information,
+and the vector is subject to an arbitrary, instrument-dependent overall scale.
+Treating $x$ directly as a point in $\mathbb{R}^n$ for Euclidean-distance-based
+methods (PCA, GMM) is invalid because the induced geometry does not respect
+the simplex's constraint structure (the "closure problem"). The CLR transform
+is applied in three explicit, code-verified sub-steps inside
+\texttt{Clr\_Transformer.Apply\_Clr\_Transform}.
+
+\subsubsection{Step 1: Closure to the simplex}
+
+$$
+y_i = \frac{x_i}{\sum_{j=1}^n x_j}, \qquad i = 1,\dots,n, \qquad \sum_{i=1}^n y_i = 1, \qquad y \in \Delta^{n-1}.
+$$
+
+Code: \texttt{Row\_Sums = np.sum(Valid\_Pixels, axis=1, keepdims=True)} computes
+the row-wise (per-pixel) sum, keeping the result as a $(N_{\text{valid}}, 1)$
+column so that the subsequent division
+\texttt{Proportions = Valid\_Pixels / Row\_Sums} broadcasts correctly across
+all $n$ columns without an explicit loop.
+
+\subsubsection{Step 2: Zero replacement and renormalization}
+
+The logarithm in Step 3 is undefined at $y_i = 0$, which occurs whenever an
+element's raw signal is exactly zero at a pixel. A simple multiplicative
+replacement is applied,
+
+$$
+y_i \leftarrow \delta \quad \text{wherever } y_i = 0, \qquad \delta = 10^{-4},
+$$
+
+implemented as the elementwise boolean-masked assignment
+\texttt{Proportions[Proportions == 0.0] = Delta}. Because this replacement
+breaks the unit-sum constraint ($\sum_i y_i$ is no longer exactly 1 after
+substitution), the vector is renormalized a second time,
+
+$$
+y_i \leftarrow \frac{y_i}{\sum_{j=1}^n y_j},
+$$
+
+i.e.\ \texttt{Proportions = Proportions / np.sum(Proportions, axis=1, keepdims=True)},
+restoring $y \in \Delta^{n-1}$ exactly before the logarithm is taken.
+
+\subsubsection{Step 3: Centered Log-Ratio projection}
+
+The CLR transform maps the (renormalized) proportion vector $y$ to
+$z \in \mathbb{R}^n$ by
+
+$$
+z_i = \ln y_i - \frac{1}{n}\sum_{j=1}^n \ln y_j = \ln\!\left(\frac{y_i}{g(y)}\right), \qquad
+g(y) = \left(\prod_{j=1}^n y_j\right)^{1/n}
+$$
+
+where $g(y)$ is the geometric mean of the composition. The identity
+$\frac{1}{n}\sum_j \ln y_j = \ln g(y)$ is exactly why the code never computes
+$g(y)$ directly: \texttt{Log\_Proportions = np.log(Proportions)} takes the
+elementwise log first, \texttt{Geometric\_Mean = np.mean(Log\_Proportions, axis=1, keepdims=True)}
+computes the row-wise arithmetic mean of the logs (which equals $\ln g(y)$ by
+the identity above, without ever materializing $g(y)$ itself and thereby
+avoiding a separate product-then-root computation that would be numerically
+less stable), and \texttt{Clr\_Data = Log\_Proportions - Geometric\_Mean}
+performs the subtraction, again broadcasting the $(N_{\text{valid}},1)$ mean
+column across all $n$ output columns.
+
+\paragraph{Rigor note: rank deficiency.} By construction,
+$\sum_{i=1}^n z_i = \sum_i \ln y_i - n \cdot \frac{1}{n}\sum_j \ln y_j = 0$ for
+every row. Consequently \texttt{clr\_data} does not occupy the full
+$n$-dimensional Euclidean space: every row lies on the same
+$(n-1)$-dimensional hyperplane $\{z : \sum_i z_i = 0\}$, so the covariance
+matrix of \texttt{clr\_data} is rank-deficient with exactly one zero
+eigenvalue. This directly explains why PCA in notebook 03 (below) is
+well-posed and typically needs at most $n-1$ components to capture 100\% of
+the variance.
+
+\subsubsection{Data lifecycle for notebook 02}
+
+\textbf{Load:} \texttt{valid\_pixels.npy} ($N_{\text{valid}} \times n$,
+\texttt{float64}) from \texttt{data/xrf/output/processed/}.
+\textbf{Transform:} the three sub-steps above, executed once via
+\texttt{Clr\_Transformer.Apply\_Clr\_Transform(valid\_pixels, Delta=config.Zero\_Replacement\_Delta)}.
+\textbf{Save:} \texttt{clr\_data} ($N_{\text{valid}} \times n$,
+\texttt{float64}) written to \texttt{page\_001\_clr.npy} in the same processed
+directory, to be consumed by notebook 03's PCA step.
+
+% ==============================================================================
+% [NEW PLOT NEEDED: Simplex vs. CLR Euclidean Space Comparison]
+% Suggested Source: Inline matplotlib cell in `02_coda_transformations.ipynb`
+%   (two-panel plt.subplots); not persisted to disk in the notebook as written.
+% Plot Type: Side-by-side scatter plots (2 panels)
+% X-Axis (left panel): Label = "Proportion Element 0 (y_1)", Range/Scale = [0, 1]
+% Y-Axis (left panel): Label = "Proportion Element 1 (y_2)", Range/Scale = [0, 1]
+% X-Axis (right panel): Label = "CLR Element 0 (z_1)", Range/Scale = [auto, symmetric around 0]
+% Y-Axis (right panel): Label = "CLR Element 1 (z_2)", Range/Scale = [auto, symmetric around 0]
+% Data Series / Curves:
+%   1. Left: proportions[:, 0] vs proportions[:, 1], alpha=0.3, s=2, blue (default)
+%   2. Right: clr_data[:, 0] vs clr_data[:, 1], alpha=0.3, s=2, orange
+% Key Trend to Highlight: The left panel's points are visually compressed near
+%   the simplex boundary/corner (channels 0-1 dominated by other channels),
+%   while the right panel spreads the same pixels more symmetrically around
+%   the origin in log-ratio space — the qualitative effect of removing closure.
+% ==============================================================================
+
+\subsection{Notebook 03 --- PCA Dimensionality Reduction and Probabilistic GMM Clustering}
+
+\subsubsection{Step 1: PCA on the CLR coordinates}
+
+\texttt{clr\_data} ($N_{\text{valid}} \times n$) is loaded and passed to
+\texttt{Xrf\_Gmm\_Segmenter}, configured by \texttt{Xrf\_Segmentation\_Config}
+(\texttt{Pca\_Variance\_Ratio=0.95}, \texttt{Gmm\_Min\_K=2},
+\texttt{Gmm\_Max\_K=8}, \texttt{Covariance\_Type="full"}). Internally,
+\texttt{sklearn.decomposition.PCA(n\_components=Variance\_Ratio, svd\_solver="full")}
+first centers the data by subtracting the column means
+$\bar z_i = \frac{1}{N_{\text{valid}}}\sum_p z_{p,i}$, forms the empirical
+covariance
+
+$$
+\Sigma = \frac{1}{N_{\text{valid}}-1} \left(Z_c\right)^\top Z_c, \qquad Z_c = z - \bar z,
+$$
+
+and eigendecomposes it, $\Sigma v_j = \lambda_j v_j$, with eigenvalues sorted
+$\lambda_1 \geq \lambda_2 \geq \cdots \geq \lambda_n \approx 0$ (the last
+eigenvalue is $\approx 0$ precisely because of the rank-deficiency noted at
+the end of notebook 02). Passing a \emph{float} `n\_components` in $(0,1]$
+tells scikit-learn to automatically select the smallest $m$ such that the
+cumulative explained-variance ratio meets the target,
+
+$$
+m = \min\left\{ m' : \frac{\sum_{j=1}^{m'} \lambda_j}{\sum_{j=1}^{n} \lambda_j} \geq \texttt{Variance\_Ratio} = 0.95 \right\},
+$$
+
+and the projected coordinates are $Z = Z_c V_m \in \mathbb{R}^{N_{\text{valid}} \times m}$,
+computed in one call as \texttt{Z\_Data = Pca\_Model.fit\_transform(Clr\_Data)}.
+
+\subsubsection{Step 2: Model-order selection via BIC}
+
+\texttt{Xrf\_Gmm\_Segmenter.Compute\_Bic\_Curve(Clr\_Data, K\_Range, Variance\_Ratio)}
+re-runs the PCA projection above once, then for every candidate
+$K \in \{2,3,\dots,8\}$ fits a full-covariance multivariate Gaussian mixture
+in the $m$-dimensional PCA space,
+
+$$
+p(z) = \sum_{k=1}^K \pi_k \, \mathcal{N}_m(Z \mid \mu_k, \Sigma_k), \qquad \mu_k \in \mathbb{R}^m, \ \Sigma_k \in \mathbb{R}^{m\times m} \text{ symmetric positive-definite},
+$$
+
+via \texttt{GaussianMixture(n\_components=K, random\_state=42).fit(Z\_Data)},
+and records $\text{BIC}(K) = \texttt{Model.bic(Z\_Data)}$. For a full-covariance
+$m$-dimensional mixture with $K$ components the parameter count is
+
+$$
+p_K = \underbrace{Km}_{\text{means}} + \underbrace{K\frac{m(m+1)}{2}}_{\text{full covariances}} + \underbrace{(K-1)}_{\text{weights}},
+$$
+
+so that $\text{BIC}(K) = -2\ln\hat L_K + p_K \ln N_{\text{valid}}$ — structurally
+identical to the CT-side BIC formula, but with $p_K$ now scaling with the PCA
+dimensionality $m$ rather than being fixed at $3K-1$ for a 1D mixture.
+
+\paragraph{Rigor note: BIC curve is diagnostic-only in this run.} The notebook
+plots $\text{BIC}(K)$ for $K=2,\dots,8$ but then sets
+\texttt{optimal\_k = 8} by direct assignment (annotated in the notebook as "choose
+the optimal $K$ visually") rather than programmatically taking
+$\arg\min_K \text{BIC}(K)$. The BIC sweep is therefore evidence presented to a
+human, not an automated decision in this notebook, in contrast to the CT
+pipeline's \texttt{Gmm\_Fitter}, which does take the automated argmin.
+
+\paragraph{Rigor note: covariance type is not threaded through the BIC sweep.}
+\texttt{Compute\_Bic\_Curve}'s internal \texttt{GaussianMixture(n\_components=K, random\_state=42)}
+call never passes \texttt{covariance\_type}, so every candidate $K$ in the BIC
+curve is fit with scikit-learn's default \texttt{"full"} covariance
+regardless of what \texttt{seg\_config.Covariance\_Type} is set to; only the
+subsequent \texttt{Fit\_Predict} call (Step 3) actually honors the configured
+value.
+
+\subsubsection{Step 3: Final fit and posterior extraction}
+
+With $K$ fixed at \texttt{optimal\_k}, \texttt{Xrf\_Gmm\_Segmenter.Fit\_Predict}
+\emph{independently refits} a new PCA instance on \texttt{clr\_data} (not the
+one used inside \texttt{Compute\_Bic\_Curve} — a duplicated but harmless
+computation) and a new \texttt{GaussianMixture(n\_components=8, covariance\_type="full", random\_state=42)}
+on the resulting $Z$, then extracts
+
+$$
+\ell_p = \arg\max_k \gamma_{p,k}, \qquad \gamma_{p,k} = P(\text{class}=k \mid Z_p),
+$$
+
+via \texttt{Gmm\_Model.predict(Z\_Data)} (hard labels, \texttt{labels}) and
+\texttt{Gmm\_Model.predict\_proba(Z\_Data)} (posteriors, \texttt{probabilities}),
+both indexed over the same $N_{\text{valid}}$ ordering established when
+\texttt{valid\_pixels} was first extracted in notebook 01.
+
+\subsubsection{Step 4: Spatial reconstruction to a 2D class map}
+
+\texttt{Spatial\_Analyzer.Reconstruct\_Class\_Map(labels, mask)} inverts the
+boolean-indexing flattening from notebook 01: it allocates
+\texttt{Class\_Map = np.full(Mask.shape, Fill\_Value)} (default
+\texttt{Fill\_Value=-1}, an $(M,N)$ integer array pre-filled with the
+background sentinel), then performs the scatter assignment
+
+$$
+C_{i,j} = \ell_p \ \text{ for the } p\text{-th True entry of } B \text{ in row-major order}, \qquad C_{i,j} = -1 \text{ where } B_{i,j} = 0,
+$$
+
+i.e.\ \texttt{Class\_Map[Mask] = Labels} — valid precisely because boolean
+assignment on the left-hand side traverses \texttt{True} positions in the same
+row-major order that \texttt{Stack[Mask]} used to build \texttt{valid\_pixels}
+(and hence \texttt{labels}) in the first place.
+
+\subsubsection{Data lifecycle for notebook 03}
+
+\textbf{Load:} \texttt{page\_001\_clr.npy} ($N_{\text{valid}}\times n$) and,
+later in the same notebook, \texttt{page\_001\_mask.npy} ($M\times N$
+boolean). \textbf{Transform:} PCA $\to$ BIC sweep (diagnostic) $\to$ final
+$K=8$ GMM fit $\to$ \texttt{labels}, \texttt{probabilities} $\to$
+\texttt{class\_map} via spatial reconstruction. \textbf{Save:}
+\texttt{page\_001\_labels.npy} ($N_{\text{valid}}$, \texttt{int}),
+\texttt{page\_001\_meta.json} (\texttt{\{"optimal\_k": 8\}}),
+\texttt{page\_001\_class\_map.npy} ($M\times N$, \texttt{int}, from
+\texttt{class\_map} before the float32/NaN conversion), plus a
+\texttt{float32} TIFF export \texttt{Cluster\_Segmentation\_Map.tiff} (written
+via \texttt{tifffile.imwrite} after \texttt{np.nan\_to\_num(class\_map, nan=-1.0)}
+— a precautionary conversion that is largely redundant here since
+\texttt{Reconstruct\_Class\_Map}'s default fill value is already the integer
+\texttt{-1}, not \texttt{np.nan}), and, per class $k \in \{0,\dots,7\}$, a
+binary Fiji-compatible mask TIFF (\texttt{Cluster\_\{k\}\_Fiji\_Mask.tiff},
+values $\{0, 255\}$ from \texttt{(class\_map == k).astype(np.uint8) * 255})
+and a colored visualization PNG (\texttt{Cluster\_\{k\}\_Visual.png}).
+
+\paragraph{Rigor note: path inconsistency.} \texttt{Cluster\_Segmentation\_Map.tiff}
+is written with a bare relative filename, i.e.\ to the notebook kernel's
+current working directory, while every other artifact in the same notebook is
+written explicitly under \texttt{PROCESSED\_DATA\_DIR} or \texttt{FIGURES\_DIR}
+— an inconsistency in output location for that one file.
+
+% ==============================================================================
+% [NEW PLOT NEEDED: BIC Curve for XRF Compositional Classes]
+% Suggested Source: Inline matplotlib cell in `03_gmm_spatial_clustering.ipynb`
+%   using Xrf_Gmm_Segmenter.Compute_Bic_Curve output (bic_scores dict); shown
+%   via plt.show() only, not persisted to disk in the notebook as written.
+% Plot Type: Line chart with markers
+% X-Axis: Label = "Number of Compositional Classes K", Range/Scale = [Gmm_Min_K=2 to Gmm_Max_K=8]
+% Y-Axis: Label = "BIC Score (lower is better)", Range/Scale = [min(bic_scores) to max(bic_scores)]
+% Data Series / Curves:
+%   1. BIC(K) for K in {2,...,8} (Color: default matplotlib blue, marker='o')
+% Key Trend to Highlight: Annotate the manually chosen K=8 even if it is not
+%   the argmin, to make explicit that the final K was a visual/human choice
+%   overriding (or confirming) the BIC-optimal value.
+% ==============================================================================
+
+% ==============================================================================
+% [NEW PLOT NEEDED: Reconstructed XRF Class Map]
+% Suggested Source: Inline matplotlib cell in `03_gmm_spatial_clustering.ipynb`
+%   (ax.imshow(class_map, ...)); also separately exported per-class as
+%   Cluster_k_Visual.png under data/xrf/output/figures/ (restricted, not
+%   referenced directly per the figure-handling decision for this report).
+% Plot Type: Discrete/categorical 2D heatmap with legend
+% X-Axis: Label = "Pixel column"
+% Y-Axis: Label = "Pixel row"
+% Data Series / Curves:
+%   1. class_map values in {-1, 0, ..., K-1}, discrete colormap ("tab10" truncated
+%      to K colors), background (-1) shown in black via cmap.set_bad or explicit masking.
+% Key Trend to Highlight: Spatial coherence (or lack thereof) of each
+%   compositional class across the physical page layout, and which classes
+%   plausibly correspond to ink strokes vs. substrate vs. background.
+% ==============================================================================
+
+\subsection{Notebook 04 --- Per-Page Leaf Signature Extraction ($F_h$)}
+
+\subsubsection{Compositional abundances}
+
+For a page with $N_{\text{valid}}$ labeled pixels and $K = \texttt{optimal\_k}$
+classes, the abundance of class $k$ is its area fraction,
+
+$$
+A_k = \frac{1}{N_{\text{valid}}} \sum_{p=1}^{N_{\text{valid}}} \mathbb{1}[\ell_p = k], \qquad \sum_{k=0}^{K-1} A_k = 1,
+$$
+
+which is a valid compositional vector on the simplex $\Delta^{K-1}$ (a
+partition of unity over the $K$ classes, since every valid pixel is assigned
+to exactly one class by the $\arg\max$ decision rule in notebook 03).
+
+\paragraph{Rigor note: implementation is a loop, not a vectorized reduction.}
+\texttt{Leaf\_Signature\_Extractor.Compute\_Abundances} computes this with an
+explicit \texttt{for K in range(Num\_Classes): Abundances[K] = np.sum(Labels == K) / Total\_Valid}
+— mathematically equivalent to, but not implemented as, the single vectorized
+call \texttt{np.bincount(Labels, minlength=Num\_Classes) / Total\_Valid}.
+
+\subsubsection{Spatial (connected-component) descriptors}
+
+For each class $k$, \texttt{Spatial\_Analyzer.Extract\_Spatial\_Descriptors(class\_map, Target\_Class=k, Min\_Size=10)}
+first builds a binary indicator image
+$D^{(k)}_{i,j} = \mathbb{1}[C_{i,j} = k]$ (\texttt{Binary\_Mask}), then applies
+8-connected-component labeling via \texttt{scipy.ndimage.label} with an
+explicit $3\times3$ all-ones structuring element,
+
+$$
+\text{Structure} = \begin{pmatrix} 1&1&1\\1&1&1\\1&1&1 \end{pmatrix},
+$$
+
+which assigns a unique positive integer $c$ to every maximal 8-connected
+component of $D^{(k)}$ (0 reserved for background), producing
+\texttt{Labeled\_Array} and \texttt{Num\_Features}. Component areas are
+obtained in one vectorized pass,
+$|\text{R}_c| = \texttt{np.bincount(Labeled\_Array.ravel())[1:]}$ (the `[1:]`
+slice discards the background bin at index 0), and are filtered to
+$\mathcal{R} = \{ c : |R_c| \geq \texttt{Min\_Size} = 10 \}$
+(\texttt{Valid\_Areas}) via boolean array indexing. The two reported
+descriptors are
+
+$$
+\text{Num\_Regiones}_k = |\mathcal{R}|, \qquad
+\text{Tamano\_Promedio}_k = \frac{1}{|\mathcal{R}|}\sum_{c \in \mathcal{R}} |R_c|
+$$
+
+(zero for both if $\mathcal{R} = \emptyset$, guarded explicitly in code).
+
+\subsubsection{Weighted multi-page aggregation (demonstrated, not yet real)}
+
+\texttt{Leaf\_Signature\_Extractor.Compute\_Weighted\_Book\_Signature(Signatures, Weights)}
+implements a general weighted mean over a stack of $H$ page signatures,
+$\text{Signatures} \in \mathbb{R}^{H\times K}$:
+
+$$
+\bar F_k = \sum_{h=1}^H \tilde w_h \, \text{Signatures}_{h,k}, \qquad \tilde w_h = \frac{w_h}{\sum_{h'=1}^H w_{h'}}.
+$$
+
+Code first computes \texttt{Normalized\_Weights = Weights / np.sum(Weights)}
+and then calls \texttt{np.average(Signatures, axis=0, weights=Normalized\_Weights)}
+— which itself renormalizes its \texttt{weights} argument internally, so the
+manual normalization is mathematically inert (harmless double normalization,
+not a bug, since renormalizing an already-normalized weight vector is the
+identity operation).
+
+\paragraph{Rigor note: this call is exercised only on synthetic data here.}
+In notebook 04, \texttt{Signatures} is \texttt{mock\_signatures = np.random.rand(5, optimal\_k)}
+(5 fabricated pages) with illustrative weights \texttt{mock\_weights = [1.0, 0.8, 0.9, 0.2, 1.0]}
+(page index 3, weight 0.2, is annotated in-notebook as "poor quality"). This
+is a usage demonstration of the aggregation function only — it is not the
+real book-level signature, and the resulting \texttt{book\_global\_signature.npy}
+saved at the end of this notebook is therefore a synthetic-input artifact, to
+be distinguished from the real per-category aggregation performed on genuine
+multi-page data in notebook 06.
+
+\subsubsection{Data lifecycle for notebook 04}
+
+\textbf{Load:} \texttt{page\_001\_labels.npy}, \texttt{page\_001\_class\_map.npy},
+\texttt{page\_001\_meta.json} (for \texttt{optimal\_k}).
+\textbf{Transform:} \texttt{abundances} ($K$-vector) via \texttt{Compute\_Abundances};
+\texttt{spatial\_features} (list of $K$ dicts) via \texttt{Extract\_Spatial\_Descriptors};
+\texttt{global\_signature} ($K$-vector) via \texttt{Compute\_Weighted\_Book\_Signature}
+on the synthetic mock inputs described above. \textbf{Save:} only
+\texttt{global\_signature} is persisted, to
+\texttt{data/xrf/output/book\_global\_signature.npy} (note: directly under
+\texttt{OUTPUT\_DATA\_DIR}, not \texttt{PROCESSED\_DATA\_DIR}, unlike the
+per-page artifacts from notebooks 01--03). \texttt{abundances} and
+\texttt{spatial\_features} are computed and printed but not saved to disk in
+this notebook — they are recomputed from scratch in notebooks 06 and 07 (see
+below) rather than reloaded.
+
+\subsection{Notebook 05 --- Page Categorization (Human-in-the-Loop Tagging)}
+
+\subsubsection{Procedural steps (no numerical transform)}
+
+This notebook performs metadata mutation and human interaction, not
+mathematics; every step is stated explicitly for completeness since the
+"no skipped steps" rigor requirement applies to procedure as well as math.
+
+\begin{enumerate}[nosep]
+    \item \textbf{Discovery:} \texttt{sorted(PROCESSED\_DATA\_DIR.glob("page\_*\_meta.json"))}
+    enumerates every page for which notebook 03 has produced a metadata file,
+    deriving each \texttt{Page\_Id} from the filename stem with
+    \texttt{Meta\_Path.stem.replace("\_meta", "")}.
+    \item \textbf{Read current tag:} \texttt{Category\_Registry.Load\_Page\_Category(Meta\_Path)}
+    opens the JSON file and returns \texttt{Metadata.get("structural\_category")},
+    i.e.\ \texttt{None} if the key is absent (untagged) or the previously
+    written string otherwise.
+    \item \textbf{Visual context:} for untagged pages whose
+    \texttt{\{Page\_Id\}\_class\_map.npy} exists, it is loaded and displayed with
+    \texttt{plt.imshow(Class\_Map, cmap="tab10")} to give the human tagger
+    visual context before prompting.
+    \item \textbf{Prompt and validate:} \texttt{input(...)} collects a free-text
+    category string restricted, by convention, to
+    \texttt{Xrf\_Comparison\_Config.Allowed\_Categories =}
+    \texttt{["text\_only", "chapter\_start", "illustration", "mixed", "unknown"]}.
+    \texttt{Category\_Registry.Write\_Page\_Category} calls
+    \texttt{Category\_Registry.Validate\_Category\_Tag}, which raises
+    \texttt{ValueError} if the string is not in the allowed vocabulary; the
+    notebook catches this and skips the page with a message, leaving it
+    untagged for a future pass.
+    \item \textbf{Persist:} on success, \texttt{Update\_Page\_Metadata} loads
+    the existing \texttt{meta.json} dict, merges in four new keys
+    (\texttt{structural\_category}, \texttt{structural\_category\_source}
+    \texttt{= "manual"}, \texttt{structural\_category\_secondary = []},
+    \texttt{structural\_category\_notes = ""}) via a plain
+    \texttt{dict.update}, and rewrites the whole JSON object back to the same
+    file path — existing keys (e.g.\ \texttt{optimal\_k}) are preserved
+    because they are not touched by the update.
+    \item \textbf{Summary:} \texttt{Category\_Registry.List\_Tagged\_Pages}
+    re-scans all metadata files, groups page ids into a
+    \texttt{\{category: [page\_id,\ldots]\}} dictionary (untagged pages fall
+    into an explicit \texttt{"untagged"} bucket), and flags any real category
+    with fewer than \texttt{Min\_Pages\_Per\_Category = 5} tagged pages as
+    "low-confidence" in the printed summary (a display-only flag; the pages
+    themselves are still included in every downstream aggregation).
+\end{enumerate}
+
+\subsubsection{Data lifecycle for notebook 05}
+
+\textbf{Load:} every \texttt{page\_*\_meta.json} and, opportunistically, the
+matching \texttt{*\_class\_map.npy} for visual display only.
+\textbf{Transform:} none numerical — a controlled-vocabulary string is
+attached to each page's metadata. \textbf{Save:} the same
+\texttt{page\_*\_meta.json} files are overwritten in place with the four new
+\texttt{structural\_category*} fields merged in.
+
+\subsection{Notebook 06 --- Category-Level Signature Comparison}
+
+\subsubsection{Rebuilding per-page signatures from persisted primitives}
+
+For every tagged page (untagged pages are explicitly skipped with a printed
+warning), the notebook reloads \texttt{\{Page\_Id\}\_labels.npy} and
+\texttt{\{Page\_Id\}\_class\_map.npy} and the page's \texttt{optimal\_k} from
+its \texttt{meta.json}, then \emph{recomputes} both
+$A^{(h)} = \texttt{Compute\_Abundances(Labels, Optimal\_K)}$ and the per-class
+spatial descriptor dictionary via
+\texttt{\{k: Extract\_Spatial\_Descriptors(Class\_Map, k, Min\_Size) for k in range(Optimal\_K)\}}
+— rather than reloading any signature previously computed in notebook 04.
+The only genuinely cross-notebook \emph{persisted} signal consumed here is the
+\texttt{structural\_category} string written by notebook 05.
+
+\paragraph{Rigor note: implicit equal-$K$ assumption across pages in a category.}
+\texttt{Category\_Signature\_Aggregator.Aggregate\_By\_Category} groups all
+$A^{(h)}$ vectors sharing a category into a Python list and then calls
+\texttt{np.stack(Signatures, axis=0)} to form
+$M_c \in \mathbb{R}^{H_c \times K}$. Since \texttt{optimal\_k} is chosen
+manually per page in notebook 03, \texttt{np.stack} implicitly \emph{requires}
+every page sharing a category to have been segmented with the identical $K$;
+this is an assumption of the pipeline as written, not a value it checks or
+enforces before stacking.
+
+\subsubsection{Category mean signature and spread}
+
+For a category $c$ with pages $h = 1,\dots,H_c$,
+
+$$
+\bar F_{c,k} = \frac{1}{H_c}\sum_{h=1}^{H_c} A^{(h)}_k
+$$
+
+is computed by calling \texttt{Compute\_Weighted\_Book\_Signature}
+(Notebook 04's function, reused verbatim) with
+\texttt{Uniform\_Weights = np.ones(H\_c)} — a uniform weighted mean reduces
+exactly to the simple arithmetic mean, since $\tilde w_h = 1/H_c$ for all $h$.
+
+Robust spread per class is the median absolute deviation,
+
+$$
+\text{med}_{c,k} = \operatorname{median}_h A^{(h)}_k, \qquad
+\text{MAD}_{c,k} = \operatorname{median}_h \left| A^{(h)}_k - \text{med}_{c,k} \right|,
+$$
+
+via \texttt{Category\_Signature\_Aggregator.Compute\_Category\_Spread}, using
+\texttt{np.median} twice (once for the per-class median, once for the median
+of absolute deviations from it) — note this is the \emph{unscaled} MAD (no
+multiplication by the usual $1.4826$ normal-consistency constant at this
+stage; that scaling is applied later, in notebook 07, via the $0.6745$
+constant, which is $\approx 1/1.4826$).
+
+\subsubsection{Region-count aggregation (computed but not persisted)}
+
+\texttt{Category\_Spatial\_Comparator.Aggregate\_Region\_Stats} groups the
+per-page spatial descriptor dictionaries by category and, for every
+class id $k$ observed in that category's pages, averages the two scalar
+descriptors across pages:
+
+$$
+\overline{\text{Num\_Regiones}}_{c,k} = \frac{1}{|\{h : k \in \text{page } h\}|}\sum_h \text{Num\_Regiones}_{h,k}, \qquad
+\overline{\text{Tamano\_Promedio}}_{c,k} \ \text{analogously.}
+$$
+
+\paragraph{Rigor note: this result is displayed but never saved to disk.} The
+notebook cell simply evaluates \texttt{Category\_Region\_Stats} as its last
+expression (Jupyter's automatic display), but no \texttt{np.save}/\texttt{json.dump}
+call persists this dictionary anywhere; only the unrelated \texttt{config}
+values are written into \texttt{category\_comparison\_summary.json} at the end
+of the notebook.
+
+\subsubsection{Data lifecycle for notebook 06}
+
+\textbf{Load:} all tagged pages' \texttt{labels.npy}, \texttt{class\_map.npy},
+\texttt{meta.json} (for \texttt{structural\_category} and \texttt{optimal\_k}).
+\textbf{Transform:} per-page abundances and spatial descriptors (recomputed);
+per-category mean signature, MAD spread, and mean region stats (aggregated).
+\textbf{Save:} \texttt{category\_signature\_\{category\}.npy} and
+\texttt{category\_spread\_\{category\}.npy} per category under
+\texttt{data/xrf/output/comparison/}; two comparison figures (bar chart, radar
+chart — see figure specs below); a best-effort illustrative montage per
+category built from the shared \emph{book-level} \texttt{Cluster\_k\_Visual.png}
+files (explicitly caveated in the notebook's own markdown as not yet a true
+per-category set); and \texttt{category\_comparison\_summary.json}
+(\texttt{page\_counts}, \texttt{low\_confidence\_categories}, and an echo of
+the four relevant \texttt{Xrf\_Comparison\_Config} fields).
+
+% ==============================================================================
+% [NEW PLOT NEEDED: Category Signature Bar Chart]
+% Suggested Source: `Plot_Category_Signature_Bars` (src/xrf/visualization/xrf_plots.py),
+%   invoked in `06_category_signature_comparison.ipynb`; saved by the function
+%   itself to data/xrf/output/comparison/category_signature_bars.png (restricted
+%   path, not referenced directly here per the figure-handling decision).
+% Plot Type: Grouped bar chart with error bars
+% X-Axis: Label = "Compositional class (class_0 ... class_{K-1})"
+% Y-Axis: Label = "Mean abundance", Range/Scale = [0, max bar height + error]
+% Data Series / Curves:
+%   1. One bar group per structural category, bar height = Category_Signatures[category][k]
+%   2. Error bars = Category_Spread[category][k] (MAD), capsize=3
+% Key Trend to Highlight: Classes where categories diverge most strongly in
+%   mean abundance, and categories whose error bars are large relative to
+%   their mean (indicating unreliable small-H_c estimates).
+% ==============================================================================
+
+% ==============================================================================
+% [NEW PLOT NEEDED: Category Signature Radar Overlay]
+% Suggested Source: `Plot_Category_Signature_Radar` (src/xrf/visualization/xrf_plots.py);
+%   saved by the function itself to
+%   data/xrf/output/comparison/category_signature_radar.png (restricted path).
+% Plot Type: Polar/radar chart, one closed polygon per category
+% Axes: K angular spokes at angles = linspace(0, 2*pi, K, endpoint=False), one per class
+% Data Series / Curves:
+%   1. One filled, semi-transparent (alpha=0.1) polygon line per category,
+%      values = Category_Signatures[category] with the first value repeated
+%      at the end to close the polygon
+% Key Trend to Highlight: Overall "shape" differences between category
+%   profiles (e.g. a category dominated by one or two classes vs. one with a
+%   flat/uniform profile across classes).
+% ==============================================================================
+
+\subsection{Notebook 07 --- Rarity Review (Robust Outlier Triage)}
+
+\subsubsection{Recomputation pattern (consistent with notebook 06)}
+
+Exactly as in notebook 06, \texttt{Page\_Signatures} and \texttt{Page\_Categories}
+are rebuilt from scratch by reloading each tagged page's \texttt{labels.npy}
+and \texttt{meta.json} and recalling \texttt{Compute\_Abundances} — neither
+notebook depends on the other's in-memory results, and the only artifact
+truly shared across notebooks 05, 06, and 07 is the \texttt{structural\_category}
+field persisted in each page's \texttt{meta.json}.
+
+\subsubsection{Robust per-class deviation score}
+
+For a page with signature $A^{(h)} \in \mathbb{R}^K$ tagged with category $c$,
+the per-class robust deviation is
+
+$$
+z^{(h)}_k = 0.6745 \cdot \frac{A^{(h)}_k - \text{med}_{c,k}}{\text{MAD}_{c,k}}, \qquad k = 0,\dots,K-1,
+$$
+
+computed by \texttt{Rarity\_Scorer.Compute\_Robust\_Deviation}, where
+$\text{med}_{c,k}$ and $\text{MAD}_{c,k}$ are exactly notebook 06's category
+median/MAD (recomputed here via the same private grouping helper and
+\texttt{Category\_Signature\_Aggregator.Compute\_Category\_Spread}). The
+constant $0.6745 \approx 1/1.4826$ is the classical normal-consistency scale
+factor for the MAD (i.e.\ for data drawn from $\mathcal{N}(\mu,\sigma^2)$,
+$\mathbb{E}[\text{MAD}] \approx 0.6745\,\sigma$), which makes $z^{(h)}_k$ a
+robust approximation to a standard z-score under an assumed unimodal, roughly
+symmetric null distribution per class within a category — explicitly framed
+in the code's own docstrings as a triage heuristic, not a formal hypothesis
+test, since category groups can be small.
+
+\paragraph{Guard clause.} If $\text{MAD}_{c,k} = 0$ for any class present in a
+scored page's signature (which happens when every page currently in a small
+category shares an identical value for that class), the division above is
+undefined; \texttt{Compute\_Robust\_Deviation} raises \texttt{RuntimeError}
+explicitly rather than silently producing \texttt{inf}/\texttt{nan}.
+
+\subsubsection{Ranking rule}
+
+Rather than combining the $K$ per-class deviations into a joint multivariate
+statistic (e.g.\ a Mahalanobis-type distance), the pipeline reduces them to a
+single scalar via the $L^\infty$ norm — the single worst-offending class
+determines a page's overall rarity:
+
+$$
+d^{(h)} = \max_{k} \left| z^{(h)}_k \right|, \qquad
+\text{Flagged}^{(h)} = \mathbb{1}\!\left[ d^{(h)} > \texttt{Rarity\_Mad\_Threshold} = 3.5 \right].
+$$
+
+\texttt{Rarity\_Scorer.Rank\_Pages\_By\_Rarity} returns the list of
+$(\text{Page\_Id}, d^{(h)}, \text{Flagged}^{(h)})$ tuples sorted in descending
+order of $d^{(h)}$, so the pages most likely to warrant expert review appear
+first.
+
+\subsubsection{Human review step}
+
+For every flagged page, the notebook reloads and displays its persisted
+\texttt{\{Page\_Id\}\_class\_map.npy} with \texttt{plt.imshow(..., cmap="tab10")}
+so a human reviewer can visually inspect exactly which pixels drove the
+statistical flag — this display is purely interactive and is not itself
+saved to any file. A montage of flagged pages is then assembled from the
+shared book-level \texttt{Cluster\_k\_Visual.png} files via
+\texttt{Build\_Category\_Montage} (again explicitly caveated in the
+notebook's markdown as illustrative, reusing the same book-level visuals as
+notebook 06 rather than true per-page-flagged exports).
+
+\subsubsection{Data lifecycle for notebook 07}
+
+\textbf{Load:} all tagged pages' \texttt{labels.npy} and \texttt{meta.json};
+for flagged pages only, their \texttt{class\_map.npy}; and the existing
+\texttt{Cluster\_*\_Visual.png} files under \texttt{data/xrf/output/figures/}
+for the montage step. \textbf{Transform:} per-page abundances (recomputed);
+category median/MAD (recomputed); per-page deviation vectors and $L^\infty$
+rarity score; ranking. \textbf{Save:} \texttt{rarity\_scores.json} (a list of
+\texttt{\{"page\_id", "max\_abs\_deviation", "is\_flagged"\}} records, already
+in ranked order) under \texttt{data/xrf/output/comparison/}, and
+\texttt{flagged\_pages\_review\_montage.png} under
+\texttt{data/xrf/output/comparison/montages/} if at least one page is flagged
+and at least one \texttt{Cluster\_*\_Visual.png} exists.
+
+% ==============================================================================
+% [NEW PLOT NEEDED: Rarity Ranking with Threshold]
+% Suggested Source: `Rarity_Scorer.Rank_Pages_By_Rarity` output, saved as
+%   data/xrf/output/comparison/rarity_scores.json (restricted path — regenerate
+%   the plot from this JSON rather than referencing any image directly).
+% Plot Type: Horizontal lollipop/bar chart, sorted descending by d^(h)
+% X-Axis: Label = "Max absolute robust deviation d^(h) = max_k |z_k^(h)|"
+% Y-Axis: Label = "Page ID (ranked)"
+% Data Series / Curves:
+%   1. One marker/bar per page, colored by is_flagged (True/False)
+%   2. Vertical reference line at x = Rarity_Mad_Threshold = 3.5
+% Key Trend to Highlight: The small subset of pages above the threshold line,
+%   annotated with their structural_category so a reviewer can see whether
+%   flags cluster within a specific category (possible sign of a
+%   too-small/too-tight category group) or are spread across categories.
+% ==============================================================================
+```
+
+**Status: Phase 1 draft complete. Per the user's explicit sequencing instruction, stop here and wait for "Proceed to Phase 2" before drafting `microct_pipeline.tex`.**
