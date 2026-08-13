@@ -54,7 +54,7 @@ def main() -> None:
     Probs = Load_From_Numpy(Probs_Path, lazy=True)
     D, H, W, K = Probs.shape
     print(f"[04_Visualize] Processed: {Processed.shape}, Probs: {Probs.shape} (K={K})")
-
+    D = 50
     if SLICE_INDICES is None:
         Slice_Indices = [D // 4, D // 2, 3 * D // 4]
     else:

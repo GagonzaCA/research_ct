@@ -45,7 +45,7 @@ from research_ct.visualization.plot_distributions import plot_gmm_components
 MIN_COMPONENTS = 2
 MAX_COMPONENTS = 16
 COVARIANCE_TYPE = "full"
-SAMPLE_SIZE = 300_000  # voxels sub-sampled for fitting; use None for all
+SAMPLE_SIZE = 900_000  # voxels sub-sampled for fitting; use None for all
 RANDOM_SEED = 42
 
 

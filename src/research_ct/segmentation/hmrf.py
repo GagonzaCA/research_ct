@@ -16,10 +16,14 @@ class Hmrf_Segmenter:
         Beta: float = 0.5,
         Max_Iterations: int = 50,
         Connectivity: int = 6,
+        Convergence_Percent: float = 0.001,
+        Patience: int = 4,
     ):
         self.Beta = Beta
         self.Max_Iterations = Max_Iterations
         self.Connectivity = Connectivity
+        self.Convergence_Percent = Convergence_Percent
+        self.Patience = Patience
 
         self.Labels: Optional[np.ndarray] = None
 
@@ -29,6 +33,11 @@ class Hmrf_Segmenter:
     ) -> np.ndarray:
         """Run ICM optimization for spatial label field regularization.
 
+        Stopping criteria (checked in order):
+            1. ``Changes == 0`` — exact convergence.
+            2. ``Changes < int(Total_Voxels * Convergence_Percent)`` for
+               ``Patience`` consecutive iterations — relative threshold.
+
         Args:
             Log_Probabilities: Pre-computed log unary scores, shape (D, H, W, K).
 
@@ -37,6 +46,9 @@ class Hmrf_Segmenter:
         """
         D, H, W, K = Log_Probabilities.shape
         Neighbors = self._Get_Neighbors()
+        Total_Voxels = D * H * W
+        Min_Changes = max(1, int(Total_Voxels * self.Convergence_Percent))
+        Stalled_Count = 0
 
         # Initialize labels using Maximum A Posteriori (MAP)
         self.Labels = np.argmax(Log_Probabilities, axis=3).astype(np.int32)
@@ -74,6 +86,17 @@ class Hmrf_Segmenter:
             if Changes == 0:
                 print("[HMRF] Spatial optimization converged.")
                 break
+
+            if Changes < Min_Changes:
+                Stalled_Count += 1
+                if Stalled_Count >= self.Patience:
+                    print(
+                        f"[HMRF] Converged below {self.Convergence_Percent:.4%} "
+                        f"threshold for {self.Patience} iterations."
+                    )
+                    break
+            else:
+                Stalled_Count = 0
 
         return self.Labels
 

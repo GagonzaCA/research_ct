@@ -41,6 +41,8 @@ TEST_Z_STOP = 50  # process at most this many Z slices; None = full depth
 BETA = 0.2  # Potts smoothness strength (low = fine detail, high = smooth)
 MAX_ITERATIONS = 100
 CONNECTIVITY = 6  # 6 or 26
+CONVERGENCE_PERCENT = 0.01  # fraction of total voxels (0.1 %)
+PATIENCE = 4  # consecutive stalled iterations before stopping
 
 
 def main() -> None:
@@ -78,7 +80,13 @@ def main() -> None:
     Labels_Gmm = Log_Probs.argmax(axis=-1).astype(np.int32)
 
     # 4. Run HMRF.
-    Hmrf = Hmrf_Segmenter(Beta=BETA, Max_Iterations=MAX_ITERATIONS, Connectivity=CONNECTIVITY)
+    Hmrf = Hmrf_Segmenter(
+        Beta=BETA,
+        Max_Iterations=MAX_ITERATIONS,
+        Connectivity=CONNECTIVITY,
+        Convergence_Percent=CONVERGENCE_PERCENT,
+        Patience=PATIENCE,
+    )
     Labels_Hmrf = Hmrf.Fit(Log_Probs)
 
     # 5. Save HMRF labels (test slab only).
