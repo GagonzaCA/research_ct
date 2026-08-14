@@ -38,6 +38,19 @@ from xrf.config import Xrf_Segmentation_Config
 from xrf.segmentation.xrf_gmm import Xrf_Gmm_Segmenter
 from xrf.spatial.spatial_analyzer import Spatial_Analyzer
 
+# ---------------------------------------------------------------------------
+# Tunable parameters.
+# ---------------------------------------------------------------------------
+# Maximum number of valid pixels to feed into the BIC scan and GMM fit.
+# GMM fitting cost grows with the number of samples, so a full-resolution page
+# (hundreds of thousands of pixels) can take many minutes; a subsample is
+# usually enough to recover the cluster centroids.  Set to None to disable
+# subsampling and fit on every pixel.
+MAX_SAMPLES = 50_000
+
+# Fixed seed so the random subsample is reproducible across runs.
+RANDOM_SEED = 42
+
 
 def run(Page_Dir: Path) -> None:
     """Cluster a single processed page with PCA + GMM.
@@ -63,12 +76,27 @@ def run(Page_Dir: Path) -> None:
     Seg_Config = Xrf_Segmentation_Config()
     K_Range = list(range(Seg_Config.Gmm_Min_K, Seg_Config.Gmm_Max_K + 1))
 
+    # Sub-sample valid pixels for fitting (GMM cost grows with sample count).
+    Fit_Data = Clr_Data
+    if MAX_SAMPLES is not None and Clr_Data.shape[0] > MAX_SAMPLES:
+        Indices = np.random.RandomState(RANDOM_SEED).choice(
+            Clr_Data.shape[0], MAX_SAMPLES, replace=False
+        )
+        Fit_Data = Clr_Data[Indices]
+        print(
+            f"[03_Gmm_Cluster] {Page_Id}: fitting on {Fit_Data.shape[0]:,} / "
+            f"{Clr_Data.shape[0]:,} sampled pixels (MAX_SAMPLES={MAX_SAMPLES})."
+        )
+    else:
+        print(f"[03_Gmm_Cluster] {Page_Id}: fitting on all {Clr_Data.shape[0]:,} pixels.")
+
     # BIC curve + auto-selection.
+    print(f"[03_Gmm_Cluster] {Page_Id}: scanning BIC over K={K_Range} ...")
     Bic_Scores = Xrf_Gmm_Segmenter.Compute_Bic_Curve(
-        Clr_Data, K_Range=K_Range, Variance_Ratio=Seg_Config.Pca_Variance_Ratio
+        Fit_Data, K_Range=K_Range, Variance_Ratio=Seg_Config.Pca_Variance_Ratio
     )
     Optimal_K = min(Bic_Scores, key=Bic_Scores.get)
-    print(f"[03_Gmm_Cluster] {Page_Id}: BIC={Bic_Scores}, optimal K={Optimal_K}")
+    print(f"[03_Gmm_Cluster] {Page_Id}: BIC done, optimal K={Optimal_K}")
 
     Fig, Ax = plt.subplots(figsize=(7, 4))
     Ax.plot(list(Bic_Scores.keys()), list(Bic_Scores.values()), marker="o")
@@ -81,12 +109,20 @@ def run(Page_Dir: Path) -> None:
     Fig.savefig(Figures_Dir / f"{Page_Id}_bic.png", dpi=150, bbox_inches="tight")
     plt.close(Fig)
 
-    # Fit / predict with the selected K.
-    Labels, Probabilities, _, _ = Xrf_Gmm_Segmenter.Fit_Predict(
-        Clr_Data,
+    # Fit PCA + GMM on the (sub-sampled) data, then predict the full page.
+    print(f"[03_Gmm_Cluster] {Page_Id}: fitting GMM (K={Optimal_K}) ...")
+    _, _, Pca_Model, Gmm_Model = Xrf_Gmm_Segmenter.Fit_Predict(
+        Fit_Data,
         Num_Components=Optimal_K,
         Variance_Ratio=Seg_Config.Pca_Variance_Ratio,
         Covariance_Type=Seg_Config.Covariance_Type,
+    )
+    Z_Full = Pca_Model.transform(Clr_Data)
+    Labels = Gmm_Model.predict(Z_Full)
+    Probabilities = Gmm_Model.predict_proba(Z_Full)
+    print(
+        f"[03_Gmm_Cluster] {Page_Id}: GMM fit done; "
+        f"predicted {Clr_Data.shape[0]:,} pixels."
     )
 
     np.save(Processed_Dir / f"{Page_Id}_labels.npy", Labels)

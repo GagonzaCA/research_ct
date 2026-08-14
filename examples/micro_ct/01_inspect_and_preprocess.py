@@ -5,8 +5,8 @@ standalone script:
 
     1. Load the raw TIFF slice stack from ``data/micro_ct/raw/``.
     2. Infer scan metadata from the array properties.
-    3. Run the statistics-first preprocessing pipeline
-       (:func:`research_ct.preprocessing.pipeline_revised.Preprocess_For_Gmm_Revised`).
+    3. Run the statistics-first ROI-aware preprocessing pipeline
+       (:func:`research_ct.preprocessing.pipeline_gmm_optimized.Preprocess_For_Gmm_Optimized`).
     4. Save the preprocessed volume and diagnostic histogram plots.
 
 Run from anywhere::
@@ -36,7 +36,10 @@ from examples.common import ensure_dirs, get_micro_ct_paths
 from research_ct.io.metadata_parser import Load_Metadata
 from research_ct.io.volume_loader import Load_Slice_Stack
 from research_ct.io.volume_saver import Save_As_Numpy
-from research_ct.preprocessing.pipeline_revised import Preprocess_For_Gmm_Revised
+
+# Import the new optimized pipeline instead of the revised one
+from research_ct.preprocessing.pipeline_gmm_optimized import Preprocess_For_Gmm_Optimized
+
 from research_ct.visualization.histogram_diagnostics_viewer import (
     Plot_Histogram_Comparison,
     Plot_Slice_Histograms,
@@ -49,12 +52,14 @@ SLICE_PATTERN = "*.tif*"
 SLICE_STOP = 201  # load at most this many slices; set to None to load all
 VOXEL_SIZE_UM = 40.0  # physical voxel size, if known
 NUM_PAGES = 200  # expected page count, if known
+
+# Updated parameters for the optimized GMM pipeline
 PREPROCESSING_PARAMS = {
-    "Background_Sigma": None,  # auto-estimate
-    "Noise_Sigma": 0.8,
-    "Clip_Low_Percentile": 0.1,
-    "Clip_High_Percentile": 99.9,
-    "Check_Stationarity": True,
+    "Air_Threshold_Percentile": 10.0,  # Generates ROI mask to exclude air noise
+    "Noise_Sigma": 0.8,  # Preserves central limit theorem Gaussian shapes
+    "Clip_Low_Percentile": 0.1,  # Calculated strictly on foreground ROI
+    "Clip_High_Percentile": 99.9,  # Calculated strictly on foreground ROI
+    "Bit_Depth": 32,  # User-selected depth: 32 (float), 16 (int), or 8 (int)
     "Verbose": True,
 }
 
@@ -79,9 +84,9 @@ def main() -> None:
     print(f"[01_Inspect_Preprocess] Bit depth: {Metadata.Bit_Depth}")
     print(f"[01_Inspect_Preprocess] Voxel size (um): {Metadata.Voxel_Size_Um}")
 
-    # 3. Preprocessing (background correction + noise reduction + normalization).
-    print("[01_Inspect_Preprocess] Running revised preprocessing pipeline ...")
-    Processed_Volume, Diagnostics = Preprocess_For_Gmm_Revised(Volume, **PREPROCESSING_PARAMS)
+    # 3. Preprocessing (ROI masking + noise reduction + normalization).
+    print("[01_Inspect_Preprocess] Running optimized preprocessing pipeline ...")
+    Processed_Volume, Diagnostics = Preprocess_For_Gmm_Optimized(Volume, **PREPROCESSING_PARAMS)
 
     # 4. Histogram diagnostics.
     Plot_Histogram_Comparison(
@@ -107,8 +112,10 @@ def main() -> None:
 
     # 5. Save the preprocessed volume for the segmentation steps.
     Save_As_Numpy(Processed_Volume, Processed_Dir / "preprocessed_volume.npz")
-    print(f"[01_Inspect_Preprocess] Saved preprocessed volume -> "
-          f"{Processed_Dir / 'preprocessed_volume.npz'}")
+    print(
+        f"[01_Inspect_Preprocess] Saved preprocessed volume -> "
+        f"{Processed_Dir / 'preprocessed_volume.npz'}"
+    )
 
 
 if __name__ == "__main__":

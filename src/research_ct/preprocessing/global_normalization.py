@@ -1,143 +1,75 @@
-"""Global intensity normalization using volume-wide percentiles.
+"""Global intensity normalization strictly for ROI vectors.
 
-Linear rescaling that preserves the global intensity-to-material
-relationship. Avoids local transforms like CLAHE that destroy
-mixture model assumptions.
+Computes percentile limits explicitly on masked foreground voxels
+to prevent background Dirac delta spikes, and applies user-defined
+bit-depth quantization.
 """
 
 import numpy as np
-from typing import Tuple, Optional
+from typing import Optional
 
 
-def Global_Percentile_Normalize(
-    Volume: np.ndarray,
+def Global_Percentile_Normalize_Masked(
+    V_Obj: np.ndarray,
     Low_Percentile: float = 0.1,
     High_Percentile: float = 99.9,
-    Target_Min: float = 0.0,
-    Target_Max: float = 255.0,
+    Bit_Depth: int = 32,
     out: Optional[np.ndarray] = None,
 ) -> np.ndarray:
-    """Linear scale entire volume using global percentiles.
-
-    Every voxel is transformed by the same affine function:
-        I' = (I - P_low) / (P_high - P_low) * (Target_Max - Target_Min) + Target_Min
-
-    This preserves proportional separation between materials.
+    """Linear scale a 1D feature vector using conditional percentiles.
 
     Args:
-        Volume: Input 3D array.
-        Low_Percentile: Lower clipping percentile (default 0.1).
-        High_Percentile: Upper clipping percentile (default 99.9).
-        Target_Min: Desired output minimum.
-        Target_Max: Desired output maximum.
-        out: Optional output array (in-place when out is Volume).
+        V_Obj: 1D array of strictly foreground voxels.
+        Low_Percentile: Lower clipping percentile.
+        High_Percentile: Upper clipping percentile.
+        Bit_Depth: Target output bit depth (32 for float, 16 or 8 for int).
+        out: Optional output array (in-place when out is V_Obj). Valid
+            only if Bit_Depth == 32 to prevent dtype conflicts.
 
     Returns:
-        Normalized volume, float64, range [Target_Min, Target_Max].
+        Normalized 1D array cast to the requested Bit_Depth.
 
     Raises:
-        ValueError: If Low_Percentile >= High_Percentile.
+        ValueError: If percentiles are invalid or Bit_Depth is unsupported.
     """
     if Low_Percentile >= High_Percentile:
         raise ValueError(
-            f"Low_Percentile ({Low_Percentile}) must be < "
-            f"High_Percentile ({High_Percentile})"
+            f"Low_Percentile ({Low_Percentile}) must be < " f"High_Percentile ({High_Percentile})"
         )
 
-    Volume_Float = Volume.astype(np.float64, copy=False)
+    if Bit_Depth not in (8, 16, 32):
+        raise ValueError(f"Bit_Depth must be 8, 16, or 32, got {Bit_Depth}")
 
-    # Compute global percentiles
-    Low_Val, High_Val = np.percentile(
-        Volume_Float,
-        [Low_Percentile, High_Percentile],
-    )
+    # Ensure float32 for continuous math
+    V_Float = V_Obj.astype(np.float32, copy=False)
+
+    # Compute percentiles ONLY on the foreground object
+    P_Low, P_High = np.percentile(V_Float, [Low_Percentile, High_Percentile])
 
     if out is None:
-        out = np.empty_like(Volume_Float, dtype=np.float64)
+        out = np.empty_like(V_Float, dtype=np.float32)
+    elif out.shape != V_Obj.shape:
+        raise ValueError(f"out shape {out.shape} != V_Obj shape {V_Obj.shape}")
 
-    if High_Val <= Low_Val:
-        # Constant image
-        out.fill(Target_Min)
+    if P_High <= P_Low:
+        out.fill(0.0)
         return out
 
-    # In-place clip into output, then rescale
-    np.clip(Volume_Float, Low_Val, High_Val, out=out)
-    out -= Low_Val
-    out /= (High_Val - Low_Val)
-    out *= (Target_Max - Target_Min)
-    out += Target_Min
+    # Continuous scaling to [0.0, 1.0] range
+    np.clip(V_Float, P_Low, P_High, out=out)
+    out -= P_Low
+    out /= P_High - P_Low
 
-    return out
+    # Apply quantization based on user selection
+    if Bit_Depth == 32:
+        return out
 
+    if Bit_Depth == 16:
+        out *= 65535.0
+        np.round(out, out=out)
+        return out.astype(np.uint16, copy=False)
 
-def Z_Score_Per_Slice(
-    Volume: np.ndarray,
-    out: Optional[np.ndarray] = None,
-) -> np.ndarray:
-    """Standardize each slice independently to correct inter-slice drift.
-
-    Computes per-slice mean and std, then applies z-score:
-        I'_z = (I_z - mu_z) / sigma_z
-
-    Use only if histograms vary significantly between slices.
-    This removes global intensity differences but preserves
-    within-slice contrast.
-
-    Args:
-        Volume: 3D array, shape (D, H, W).
-        out: Optional output array (in-place when out is Volume).
-
-    Returns:
-        Standardized volume, float64, approximately N(0,1) per slice.
-    """
-    D = Volume.shape[0]
-
-    if out is None:
-        out = np.empty_like(Volume, dtype=np.float64)
-
-    for Z in range(D):
-        Slice = Volume[Z].astype(np.float64, copy=False)
-        Mean = Slice.mean()
-        Std = Slice.std()
-
-        if Std > 0:
-            out[Z] = (Slice - Mean) / Std
-        else:
-            out[Z] = Slice - Mean
-
-    return out
-
-
-def Check_Slice_Stationarity(
-    Volume: np.ndarray,
-    N_Bins: int = 256,
-) -> Tuple[bool, float]:
-    """Check if volume intensity distribution is stationary across slices.
-
-    Compares histogram intersection between first, middle, and last slices.
-
-    Args:
-        Volume: 3D array.
-        N_Bins: Number of histogram bins.
-
-    Returns:
-        Tuple of (is_stationary, similarity_score).
-        is_stationary: True if similarity > 0.8.
-        similarity_score: Histogram intersection score [0, 1].
-    """
-    D = Volume.shape[0]
-
-    # Compute histograms
-    Hist_0, Bins = np.histogram(Volume[0], bins=N_Bins, density=True)
-    Hist_mid, _ = np.histogram(Volume[D // 2], bins=Bins, density=True)
-    Hist_end, _ = np.histogram(Volume[-1], bins=Bins, density=True)
-
-    # Histogram intersection
-    Sim_0_mid = np.minimum(Hist_0, Hist_mid).sum()
-    Sim_0_end = np.minimum(Hist_0, Hist_end).sum()
-
-    Similarity = min(Sim_0_mid, Sim_0_end)
-
-    Is_Stationary = Similarity > 0.8
-
-    return Is_Stationary, Similarity
+    if Bit_Depth == 8:
+        out *= 255.0
+        np.round(out, out=out)
+        return out.astype(np.uint8, copy=False)
