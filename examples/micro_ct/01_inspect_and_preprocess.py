@@ -6,7 +6,7 @@ standalone script:
     1. Load the raw TIFF slice stack from ``data/micro_ct/raw/``.
     2. Infer scan metadata from the array properties.
     3. Run the statistics-first ROI-aware preprocessing pipeline
-       (:func:`research_ct.preprocessing.pipeline_gmm_optimized.Preprocess_For_Gmm_Optimized`).
+       (:func:`research_ct.preprocessing.pipeline_gmm.Preprocess_For_Gmm`).
     4. Save the preprocessed volume and diagnostic histogram plots.
 
 Run from anywhere::
@@ -37,8 +37,8 @@ from research_ct.io.metadata_parser import Load_Metadata
 from research_ct.io.volume_loader import Load_Slice_Stack
 from research_ct.io.volume_saver import Save_As_Numpy
 
-# Import the new optimized pipeline instead of the revised one
-from research_ct.preprocessing.pipeline_gmm_optimized import Preprocess_For_Gmm_Optimized
+# Import the pipeline instead 
+from research_ct.preprocessing.pipeline_gmm import Preprocess_For_Gmm
 
 from research_ct.visualization.histogram_diagnostics_viewer import (
     Plot_Histogram_Comparison,
@@ -86,7 +86,7 @@ def main() -> None:
 
     # 3. Preprocessing (ROI masking + noise reduction + normalization).
     print("[01_Inspect_Preprocess] Running optimized preprocessing pipeline ...")
-    Processed_Volume, Diagnostics = Preprocess_For_Gmm_Optimized(Volume, **PREPROCESSING_PARAMS)
+    Processed_Volume, Diagnostics = Preprocess_For_Gmm(Volume, **PREPROCESSING_PARAMS)
 
     # 4. Histogram diagnostics.
     Plot_Histogram_Comparison(

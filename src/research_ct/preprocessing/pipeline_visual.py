@@ -5,13 +5,13 @@ import numpy as np
 from pathlib import Path
 from typing import Tuple, Dict, Optional
 
-from .config import Preprocessing_Config
-from .contrast import Enhance_Slice_Contrast
-from .diffusion import Apply_Anisotropic_Diffusion
-from .diagnostic import Diagnose_Volume
+from .visual.config import Preprocessing_Config
+from .visual.contrast import Enhance_Slice_Contrast
+from .visual.diffusion import Apply_Anisotropic_Diffusion
+from .diagnostics.diagnostic import Diagnose_Volume
 
 
-def Preprocess_For_Gmm(
+def Preprocess_For_visual(
     Volume: np.ndarray,
     Config: Preprocessing_Config,
     Out_Dir: Optional[Path] = None,

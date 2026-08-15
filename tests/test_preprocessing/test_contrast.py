@@ -3,7 +3,7 @@
 """Tests for contrast enhancement."""
 
 import numpy as np
-from research_ct.preprocessing.contrast import (
+from research_ct.preprocessing.visual.contrast import (
     Apply_White_Tophat,
     Apply_Clahe,
     Saturate_Percentiles,

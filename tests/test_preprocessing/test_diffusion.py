@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from research_ct.preprocessing.diffusion import Apply_Anisotropic_Diffusion
+from research_ct.preprocessing.visual.diffusion import Apply_Anisotropic_Diffusion
 
 
 def test_diffusion_preserves_shape():

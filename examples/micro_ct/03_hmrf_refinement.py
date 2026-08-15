@@ -39,7 +39,7 @@ SEGMENTATION_SOURCE = "flat"  # "flat" (02a) or "sparse" (02b)
 TEST_Z_START = 0
 TEST_Z_STOP = 50  # process at most this many Z slices; None = full depth
 BETA = 0.2  # Potts smoothness strength (low = fine detail, high = smooth)
-MAX_ITERATIONS = 100
+MAX_ITERATIONS = 20
 CONNECTIVITY = 6  # 6 or 26
 CONVERGENCE_PERCENT = 0.01  # fraction of total voxels (0.1 %)
 PATIENCE = 4  # consecutive stalled iterations before stopping

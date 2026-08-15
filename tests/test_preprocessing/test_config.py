@@ -1,7 +1,7 @@
 """Tests for preprocessing configuration."""
 
 import pytest
-from research_ct.preprocessing.config import Preprocessing_Config
+from research_ct.preprocessing.visual.config import Preprocessing_Config
 
 
 def test_default_config():

@@ -9,13 +9,13 @@ import numpy as np
 
 from typing import Tuple, Dict
 
-from .roi_masking import Create_Roi_Mask
-from .noise_reduction import Reduce_Noise_Volume
-from .global_normalization import Global_Percentile_Normalize_Masked
-from .histogram_diagnostics import Assess_Gmm_Readiness
+from .gaussian.roi_masking import Create_Roi_Mask
+from .gaussian.noise_reduction import Reduce_Noise_Volume
+from .gaussian.global_normalization import Global_Percentile_Normalize_Masked
+from .diagnostics.histogram_diagnostics import Assess_Gmm_Readiness
 
 
-def Preprocess_For_Gmm_Optimized(
+def Preprocess_For_Gmm(
     Volume: np.ndarray,
     Air_Threshold_Percentile: float = 10.0,
     Noise_Sigma: float = 0.8,
@@ -106,7 +106,7 @@ def Preprocess_For_Gmm_Optimized(
     _vprint("\n[Diagnostics] Assessing GMM readiness...")
 
     # Exclude absolute zeros assigned to air during reconstruction
-    Readiness = Assess_Gmm_Readiness(Output_Volume, Exclude_Zero=True)
+    Readiness = Assess_Gmm_Readiness(Output_Volume, Exclude_Zero=False)
 
     if Verbose:
         print(f"[Diagnostics] Modes: {Readiness['n_modes']}, " f"Skew: {Readiness['skewness']:.2f}")
