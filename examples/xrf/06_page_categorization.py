@@ -34,9 +34,8 @@ from xrf.config import Xrf_Comparison_Config
 # page.  Leave a page out to skip it (it stays untagged).
 # ---------------------------------------------------------------------------
 PAGE_CATEGORIES = {
-    # "page_001": "text_only",
-    # "page_002": "illustration",
-    # "page_003": "chapter_start",
+     "BX2080_Illumination_3": "illustration",
+     "BX2080black_ink" : "text_only"
 }
 
 
@@ -48,7 +47,7 @@ def main() -> None:
     Processed_Dir = Paths["processed"]
     Config = Xrf_Comparison_Config()
 
-    Meta_Paths = sorted(Processed_Dir.glob("page_*_meta.json"))
+    Meta_Paths = sorted(Processed_Dir.glob("*_meta.json"))
     print(f"[06_Categorize] Found {len(Meta_Paths)} processed page(s).")
 
     for Meta_Path in Meta_Paths:

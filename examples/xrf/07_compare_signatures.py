@@ -66,7 +66,7 @@ def main() -> None:
     Page_Categories = {}
     Page_Spatial_Descriptors = {}
 
-    for Meta_Path in sorted(Processed_Dir.glob("page_*_meta.json")):
+    for Meta_Path in sorted(Processed_Dir.glob("*_meta.json")):
         Page_Id = Meta_Path.stem.replace("_meta", "")
         Category = Category_Registry.Load_Page_Category(Meta_Path)
         if Category is None:

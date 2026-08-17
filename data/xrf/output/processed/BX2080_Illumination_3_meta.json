@@ -1,0 +1,51 @@
+{
+  "optimal_k": 8,
+  "abundances": [
+    0.08579249543566336,
+    0.2173960632938171,
+    0.2373398276381992,
+    0.0995769813595057,
+    0.05877311556298953,
+    0.11209804712422608,
+    0.09619279017762325,
+    0.09283067940797578
+  ],
+  "spatial_descriptors": {
+    "0": {
+      "Num_Regiones": 3337.0,
+      "Tamano_Promedio": 154.22894815702728
+    },
+    "1": {
+      "Num_Regiones": 22630.0,
+      "Tamano_Promedio": 64.42677861246133
+    },
+    "2": {
+      "Num_Regiones": 13551.0,
+      "Tamano_Promedio": 140.89749833960593
+    },
+    "3": {
+      "Num_Regiones": 5623.0,
+      "Tamano_Promedio": 21.356215543304288
+    },
+    "4": {
+      "Num_Regiones": 3449.0,
+      "Tamano_Promedio": 52.14322992171644
+    },
+    "5": {
+      "Num_Regiones": 8530.0,
+      "Tamano_Promedio": 95.79601406799532
+    },
+    "6": {
+      "Num_Regiones": 6935.0,
+      "Tamano_Promedio": 14.636481614996395
+    },
+    "7": {
+      "Num_Regiones": 857.0,
+      "Tamano_Promedio": 976.7211201866978
+    }
+  },
+  "structural_category": "illustration",
+  "structural_category_source": "manual",
+  "structural_category_secondary": [],
+  "structural_category_notes": ""
+}

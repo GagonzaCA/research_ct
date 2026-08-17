@@ -1,0 +1,70 @@
+{
+  "illustration": {
+    "0": {
+      "mean_region_count": 3337.0,
+      "mean_region_size": 154.22894815702728
+    },
+    "1": {
+      "mean_region_count": 22630.0,
+      "mean_region_size": 64.42677861246133
+    },
+    "2": {
+      "mean_region_count": 13551.0,
+      "mean_region_size": 140.89749833960593
+    },
+    "3": {
+      "mean_region_count": 5623.0,
+      "mean_region_size": 21.356215543304288
+    },
+    "4": {
+      "mean_region_count": 3449.0,
+      "mean_region_size": 52.14322992171644
+    },
+    "5": {
+      "mean_region_count": 8530.0,
+      "mean_region_size": 95.79601406799532
+    },
+    "6": {
+      "mean_region_count": 6935.0,
+      "mean_region_size": 14.636481614996395
+    },
+    "7": {
+      "mean_region_count": 857.0,
+      "mean_region_size": 976.7211201866978
+    }
+  },
+  "text_only": {
+    "0": {
+      "mean_region_count": 445.0,
+      "mean_region_size": 1213.038202247191
+    },
+    "1": {
+      "mean_region_count": 2793.0,
+      "mean_region_size": 98.49266022198353
+    },
+    "2": {
+      "mean_region_count": 1043.0,
+      "mean_region_size": 18.317353787152445
+    },
+    "3": {
+      "mean_region_count": 4816.0,
+      "mean_region_size": 38.97985880398671
+    },
+    "4": {
+      "mean_region_count": 1976.0,
+      "mean_region_size": 290.02985829959516
+    },
+    "5": {
+      "mean_region_count": 372.0,
+      "mean_region_size": 12.459677419354838
+    },
+    "6": {
+      "mean_region_count": 1399.0,
+      "mean_region_size": 209.8577555396712
+    },
+    "7": {
+      "mean_region_count": 1436.0,
+      "mean_region_size": 357.5076601671309
+    }
+  }
+}

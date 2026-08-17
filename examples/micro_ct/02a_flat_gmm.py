@@ -43,7 +43,7 @@ from research_ct.visualization.plot_distributions import plot_gmm_components
 # Tunable parameters.
 # ---------------------------------------------------------------------------
 MIN_COMPONENTS = 2
-MAX_COMPONENTS = 4
+MAX_COMPONENTS = 3
 COVARIANCE_TYPE = "full"
 SAMPLE_SIZE = 900_000  # voxels sub-sampled for fitting; use None for all
 RANDOM_SEED = 42
@@ -70,8 +70,13 @@ def main() -> None:
     Figures_Dir = Paths["figures"]
 
     # 1. Load preprocessed volume lazily (memmap).
-    Processed = Load_From_Numpy(Processed_Path, lazy=True)
+    Processed = Load_From_Numpy(
+    Processed_Path 
+    )
+    Porcessed = Processed > 0 
+    
     Shape = Processed.shape
+    
     print(f"[02a_Flat_Gmm] Loaded preprocessed volume: {Shape}")
 
     # 2. Flatten and sub-sample.
@@ -84,7 +89,7 @@ def main() -> None:
         print(f"[02a_Flat_Gmm] Sampled {Sampled.shape[0]:,} voxels for fitting.")
     else:
         Sampled = Flat
-
+    
     # 3. Fit with BIC-based K selection.
     Fitter = Gmm_Fitter(
         Min_Components=MIN_COMPONENTS,

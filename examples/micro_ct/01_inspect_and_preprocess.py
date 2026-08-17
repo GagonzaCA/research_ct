@@ -57,7 +57,7 @@ NUM_PAGES = 200  # expected page count, if known
 PREPROCESSING_PARAMS = {
     "Air_Threshold_Percentile": 10.0,  # Generates ROI mask to exclude air noise
     "Noise_Sigma": 0.8,  # Preserves central limit theorem Gaussian shapes
-    "Clip_Low_Percentile": 0.1,  # Calculated strictly on foreground ROI
+    "Clip_Low_Percentile": 0.0,  # Calculated strictly on foreground ROI
     "Clip_High_Percentile": 99.9,  # Calculated strictly on foreground ROI
     "Bit_Depth": 32,  # User-selected depth: 32 (float), 16 (int), or 8 (int)
     "Verbose": True,
