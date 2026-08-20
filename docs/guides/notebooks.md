@@ -10,7 +10,7 @@ All interactive demos live in `notebooks/`.
 | `02_run_preprocessing.ipynb` | Run pipeline_revised, histogram diagnostics |
 | `03_gmm_and_hierarchical_segmentation.ipynb` | BIC-GMM, Sparse Bayesian GMM, hierarchy, streaming export |
 | `04_spatial_hmrf.ipynb` | HMRF on test region, GMM vs HMRF comparison |
-| `05_uncertainty_and_visualization.ipynb` | Material stats, uncertainty maps, napari 3D, video export |
+| `05_uncertainty_and_visualization.ipynb` | Material stats, uncertainty maps, napari 2D|
 
 ## XRF Notebooks
 

@@ -52,10 +52,9 @@ XRF notebooks live in `notebooks/xrf/` (`01_xrf_loading_and_masking.ipynb` → `
 
 ```
 src/research_ct/
-├── io/               volume_loader.py, volume_saver.py, metadata_parser.py, dragonfly_exporter.py
+├── io/               volume_loader.py, volume_saver.py, metadata_parser.py
 ├── preprocessing/    config.py, pipeline_revised.py, background_correction.py, noise_reduction.py,
 │                     global_normalization.py, histogram_diagnostics.py, contrast.py, diffusion.py
-├── processing/       dragonfly_utils.py
 ├── segmentation/     gmm_fitter.py, sparse_bayesian_gmm.py, hierarchy.py, hmrf.py, decision_engine.py
 ├── analysis/         material_stats.py, uncertainty_maps.py, page_extractor.py
 └── visualization/    napari_viewer.py, plot_distributions.py, export.py, histogram_diagnostics_viewer.py
